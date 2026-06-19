@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorAccent">#22c55e</color>
+    <color name="colorPrimary">#3b82f6</color>
+    <color name="colorPrimaryDark">#1e293b</color>
+    <string name="app_name">SewaMobilYuk Tracker</string>
+    <string name="enter_token">Masukkan Token / ID</string>
+    <string name="start_tracking">Mulai Tracking</string>
+    <string name="status_active">Status: Sedang Tracking...</string>
+    <string name="status_inactive">Status: Tidak Aktif</string>
+    <string name="stop_tracking">Berhenti Tracking</string>
+    <style name="Theme.SewaMobilYuk" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+    </style>
+</resources>

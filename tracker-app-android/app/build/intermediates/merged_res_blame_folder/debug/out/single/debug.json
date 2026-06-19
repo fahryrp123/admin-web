@@ -1,0 +1,30 @@
+[
+    {
+        "merged": "com.sewamobilyuk.tracker.app-merged_res-34:/drawable_ic_launcher.xml.flat",
+        "source": "com.sewamobilyuk.tracker.app-main-36:/drawable/ic_launcher.xml"
+    },
+    {
+        "merged": "C:\\Users\\USER\\.gradle\\daemon\\8.2\\com.sewamobilyuk.tracker.app-merged_res-34:\\drawable_logo.png.flat",
+        "source": "C:\\Users\\USER\\.gradle\\daemon\\8.2\\com.sewamobilyuk.tracker.app-main-36:\\drawable\\logo.png"
+    },
+    {
+        "merged": "C:\\Users\\USER\\.gradle\\daemon\\8.2\\com.sewamobilyuk.tracker.app-merged_res-34:\\layout_activity_main.xml.flat",
+        "source": "C:\\Users\\USER\\.gradle\\daemon\\8.2\\com.sewamobilyuk.tracker.app-main-36:\\layout\\activity_main.xml"
+    },
+    {
+        "merged": "C:\\Users\\USER\\.gradle\\daemon\\8.2\\com.sewamobilyuk.tracker.app-merged_res-34:\\xml_backup_rules.xml.flat",
+        "source": "C:\\Users\\USER\\.gradle\\daemon\\8.2\\com.sewamobilyuk.tracker.app-main-36:\\xml\\backup_rules.xml"
+    },
+    {
+        "merged": "com.sewamobilyuk.tracker.app-merged_res-34:/layout_activity_main.xml.flat",
+        "source": "com.sewamobilyuk.tracker.app-main-36:/layout/activity_main.xml"
+    },
+    {
+        "merged": "C:\\Users\\USER\\.gradle\\daemon\\8.2\\com.sewamobilyuk.tracker.app-merged_res-34:\\drawable_ic_launcher.xml.flat",
+        "source": "C:\\Users\\USER\\.gradle\\daemon\\8.2\\com.sewamobilyuk.tracker.app-main-36:\\drawable\\ic_launcher.xml"
+    },
+    {
+        "merged": "C:\\Users\\USER\\.gradle\\daemon\\8.2\\com.sewamobilyuk.tracker.app-merged_res-34:\\xml_data_extraction_rules.xml.flat",
+        "source": "C:\\Users\\USER\\.gradle\\daemon\\8.2\\com.sewamobilyuk.tracker.app-main-36:\\xml\\data_extraction_rules.xml"
+    }
+]

@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">SewaMobilYuk Tracker</string>
+    <string name="start_tracking">Mulai Tracking</string>
+    <string name="stop_tracking">Berhenti Tracking</string>
+    <string name="enter_token">Masukkan Token / ID</string>
+    <string name="status_inactive">Status: Tidak Aktif</string>
+    <string name="status_active">Status: Sedang Tracking...</string>
+</resources>

@@ -1,0 +1,4 @@
+#Sat May 23 13:46:25 WIB 2026
+base.0=C\:\\Users\\USER\\Documents\\SewaMobilYuk\\tracker-app-android\\app\\build\\intermediates\\dex\\debugAndroidTest\\mergeProjectDexDebugAndroidTest\\0\\classes.dex
+path.0=0/classes.dex
+renamed.0=classes.dex

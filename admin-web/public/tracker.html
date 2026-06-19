@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>Vehicle Tracker – SewaMobilYuk</title>
+  <meta name="description" content="GPS Tracker untuk armada SewaMobilYuk"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:  #22c55e;
+      --yellow: #eab308;
+      --red:    #ef4444;
+      --blue:   #3b82f6;
+      --bg:     #0a0a0f;
+      --card:   #13131a;
+      --border: #1e1e2e;
+      --text:   #e2e8f0;
+      --muted:  #64748b;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    /* ── TOP HEADER ── */
+    .header {
+      width: 100%;
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      padding: 20px 24px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .header-icon {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+    }
+    .header-title { font-size: 18px; font-weight: 700; }
+    .header-sub   { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* ── STATUS PILL ── */
+    .status-pill {
+      margin: 20px auto 0;
+      display: flex; align-items: center; gap: 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 10px 20px;
+      width: fit-content;
+      transition: border-color .3s;
+    }
+    .status-pill.online  { border-color: var(--green); }
+    .status-pill.offline { border-color: var(--red); }
+    .status-pill.waiting { border-color: var(--yellow); }
+
+    .pulse-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+    .pulse-dot.online  { background: var(--green);  animation: pulse-green 1.5s infinite; }
+    .pulse-dot.offline { background: var(--red); }
+    .pulse-dot.waiting { background: var(--yellow); animation: pulse-yellow 1s infinite; }
+
+    @keyframes pulse-green {
+      0%,100% { box-shadow: 0 0 0 0 rgba(34,197,94,.5); }
+      50%      { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
+    }
+    @keyframes pulse-yellow {
+      0%,100% { opacity: 1; }
+      50%      { opacity: .4; }
+    }
+
+    .status-text { font-size: 14px; font-weight: 600; }
+
+    /* ── MAIN GRID ── */
+    .main {
+      width: 100%;
+      max-width: 480px;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* ── CARD ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 20px;
+    }
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 14px;
+    }
+
+    /* ── STAT ROW ── */
+    .stat-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .stat-item {
+      background: #0d0d16;
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .stat-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .stat-value { font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
+    .stat-unit  { font-size: 12px; color: var(--muted); font-weight: 400; }
+    .stat-value.green  { color: var(--green); }
+    .stat-value.yellow { color: var(--yellow); }
+    .stat-value.red    { color: var(--red); }
+    .stat-value.blue   { color: var(--blue); }
+
+    /* ── COORDS ── */
+    .coords {
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .coord-item {
+      display: flex; align-items: center; gap: 10px;
+      background: #0d0d16; border-radius: 10px; padding: 12px 14px;
+    }
+    .coord-icon { font-size: 16px; width: 24px; text-align: center; }
+    .coord-label { font-size: 11px; color: var(--muted); }
+    .coord-val   { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* ── BATTERY BAR ── */
+    .batt-wrap {
+      display: flex; align-items: center; gap: 12px; margin-top: 4px;
+    }
+    .batt-bar {
+      flex: 1; height: 10px;
+      background: var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .batt-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width .5s, background .5s;
+    }
+    .batt-num { font-size: 14px; font-weight: 700; min-width: 42px; text-align: right; }
+
+    /* ── LOG ── */
+    .log-box {
+      background: #0d0d16;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 11px;
+      color: var(--muted);
+      max-height: 120px;
+      overflow-y: auto;
+      font-family: monospace;
+      line-height: 1.6;
+    }
+    .log-entry { display: block; }
+    .log-entry.ok   { color: var(--green); }
+    .log-entry.err  { color: var(--red); }
+    .log-entry.info { color: var(--blue); }
+
+    /* ── CAR BADGE ── */
+    .car-badge {
+      background: linear-gradient(135deg, #1e2a4a, #1a1a2e);
+      border: 1px solid #2a3a5e;
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .car-icon { font-size: 28px; }
+    .car-name { font-size: 16px; font-weight: 700; }
+    .car-token { font-size: 10px; color: var(--muted); font-family: monospace; word-break: break-all; margin-top: 3px; }
+
+    /* ── COUNTER ── */
+    .counter-wrap {
+      text-align: center;
+      padding: 6px 0;
+    }
+    .counter-num {
+      font-size: 48px; font-weight: 800; color: var(--blue);
+      letter-spacing: -2px;
+      font-variant-numeric: tabular-nums;
+    }
+    .counter-label { font-size: 12px; color: var(--muted); }
+
+    /* ── NEXT PING COUNTDOWN ── */
+    .next-ping {
+      font-size: 12px; color: var(--muted); text-align: center; margin-top: 4px;
+    }
+
+    /* ── SETUP SCREEN ── */
+    #setup-screen {
+      width: 100%; max-width: 480px;
+      padding: 32px 20px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    #setup-screen h2 {
+      font-size: 20px; font-weight: 700;
+      text-align: center; margin-bottom: 8px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group label { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+    .form-group input {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 14px;
+      color: var(--text); font-size: 15px; font-family: inherit;
+      outline: none;
+    }
+    .form-group input:focus { border-color: var(--blue); }
+    .btn-start {
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      color: white; border: none; border-radius: 12px;
+      padding: 16px; font-size: 16px; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+      margin-top: 8px;
+      transition: opacity .2s;
+    }
+    .btn-start:active { opacity: .85; }
+    .hint { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.6; }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<!-- ====== SETUP SCREEN ====== -->
+<div id="setup-screen" style="display:flex;">
+  <div style="text-align:center;">
+    <div style="font-size:48px;margin-bottom:12px;">🚗</div>
+    <h2>Setup Vehicle Tracker</h2>
+    <p class="hint">Halaman ini untuk HP yang disembunyikan di dalam mobil.<br/>Isi data di bawah lalu tekan Mulai Tracking.</p>
+  </div>
+  <div class="form-group">
+    <label>Device Token</label>
+    <input type="text" id="inp-token" placeholder="Token dari Admin Panel..." autocomplete="off" autocorrect="off" spellcheck="false"/>
+  </div>
+  <div class="form-group">
+    <label>ID Mobil (car_id)</label>
+    <input type="text" id="inp-carid" placeholder="Contoh: 1 atau ABC-123" autocomplete="off"/>
+  </div>
+  <div class="form-group">
+    <label>Label Mobil (opsional)</label>
+    <input type="text" id="inp-label" placeholder="Contoh: Toyota Avanza – B 1234 ABC" autocomplete="off"/>
+  </div>
+  <button class="btn-start" id="btn-start">📡 Mulai Tracking</button>
+  <p class="hint">Token bisa di-generate dari menu Tracking di Admin Panel.</p>
+</div>
+
+<!-- ====== TRACKER SCREEN ====== -->
+<div id="tracker-screen" style="display:none; width:100%; flex-direction:column; align-items:center;">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-icon">🚗</div>
+    <div>
+      <div class="header-title" id="display-label">Vehicle Tracker</div>
+      <div class="header-sub">SewaMobilYuk – GPS Live</div>
+    </div>
+  </div>
+
+  <!-- Status pill -->
+  <div class="status-pill waiting" id="status-pill">
+    <div class="pulse-dot waiting" id="pulse-dot"></div>
+    <span class="status-text" id="status-text">Menunggu GPS...</span>
+  </div>
+
+  <div class="main">
+
+    <!-- Car info -->
+    <div class="car-badge">
+      <div class="car-icon">🚗</div>
+      <div>
+        <div class="car-name" id="car-name-display">Loading...</div>
+        <div class="car-token" id="car-token-display">token: –</div>
+      </div>
+    </div>
+
+    <!-- Ping counter -->
+    <div class="card">
+      <div class="card-title">📡 Ping Terkirim</div>
+      <div class="counter-wrap">
+        <div class="counter-num" id="ping-count">0</div>
+        <div class="counter-label">lokasi berhasil dikirim</div>
+      </div>
+      <div class="next-ping" id="next-ping-text">Mode Live Tracking (Auto-Sync)</div>
+    </div>
+
+    <!-- GPS Stats -->
+    <div class="card">
+      <div class="card-title">📍 Koordinat GPS</div>
+      <div class="coords">
+        <div class="coord-item">
+          <div class="coord-icon">↕️</div>
+          <div>
+            <div class="coord-label">Latitude</div>
+            <div class="coord-val" id="val-lat">–</div>
+          </div>
+        </div>
+        <div class="coord-item">
+          <div class="coord-icon">↔️</div>
+          <div>
+            <div class="coord-label">Longitude</div>
+            <div class="coord-val" id="val-lng">–</div>
+          </div>
+        </div>
+        <div class="coord-item">
+          <div class="coord-icon">🎯</div>
+          <div>
+            <div class="coord-label">Akurasi</div>
+            <div class="coord-val" id="val-accuracy">–</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Speed & Battery -->
+    <div class="card">
+      <div class="card-title">⚡ Status</div>
+      <div class="stat-row">
+        <div class="stat-item">
+          <div class="stat-label">Kecepatan</div>
+          <div class="stat-value blue" id="val-speed">–</div>
+          <div class="stat-unit">km/jam</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Baterai</div>
+          <div class="stat-value green" id="val-batt-num">–</div>
+          <div class="stat-unit">%</div>
+        </div>
+      </div>
+      <div class="batt-wrap" style="margin-top:14px;">
+        <div class="batt-bar">
+          <div class="batt-fill" id="batt-fill" style="width:0%;background:var(--green)"></div>
+        </div>
+        <div class="batt-num" id="batt-num">–%</div>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="card">
+      <div class="card-title">📋 Log Aktivitas</div>
+      <div class="log-box" id="log-box">
+        <span class="log-entry info">» Tracker dimuat. Menunggu GPS...</span>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /tracker-screen -->
+
+<script>
+/* =============================================
+   CONFIG
+   ============================================= */
+const PING_INTERVAL_MS = 15000;  // 15 detik
+const SERVER_URL       = 'https://sewamobilyuk-api.exponic.site/api/tracker/ping';
+const GPS_TIMEOUT_MS   = 20000;
+
+/* =============================================
+   STATE
+   ============================================= */
+let deviceToken  = '';
+let carId        = '';
+let carLabel     = '';
+let pingCount    = 0;
+let watchId      = null;
+let currentPos   = null;
+let lastPingTime = 0;
+let isPinging    = false;
+
+/* =============================================
+   SETUP DARI URL PARAMS
+   ============================================= */
+const params = new URLSearchParams(window.location.search);
+if (params.get('token') && params.get('car_id')) {
+  document.getElementById('inp-token').value  = params.get('token');
+  document.getElementById('inp-carid').value  = params.get('car_id');
+  document.getElementById('inp-label').value  = decodeURIComponent(params.get('label') || '');
+}
+
+/* =============================================
+   LOG
+   ============================================= */
+function addLog(msg, type = 'info') {
+  const box = document.getElementById('log-box');
+  const now = new Date().toLocaleTimeString('id-ID');
+  const el = document.createElement('span');
+  el.className = 'log-entry ' + type;
+  el.textContent = `[${now}] ${msg}`;
+  box.prepend(el);
+  // Hapus log lama jika lebih dari 50 baris
+  while (box.children.length > 50) box.removeChild(box.lastChild);
+}
+
+/* =============================================
+   STATUS UI
+   ============================================= */
+function setStatus(state, text) {
+  const pill = document.getElementById('status-pill');
+  const dot  = document.getElementById('pulse-dot');
+  const txt  = document.getElementById('status-text');
+  pill.className = 'status-pill ' + state;
+  dot.className  = 'pulse-dot ' + state;
+  txt.textContent = text;
+}
+
+/* =============================================
+   UPDATE UI
+   ============================================= */
+function updateUI(pos, battPct) {
+  const { latitude, longitude, accuracy, speed } = pos.coords;
+  document.getElementById('val-lat').textContent      = latitude.toFixed(7);
+  document.getElementById('val-lng').textContent      = longitude.toFixed(7);
+  document.getElementById('val-accuracy').textContent = accuracy ? accuracy.toFixed(1) + ' m' : '–';
+  const kmh = speed != null ? (speed * 3.6).toFixed(1) : '–';
+  document.getElementById('val-speed').textContent    = kmh;
+
+  // Battery
+  const bPct = battPct != null ? battPct : null;
+  if (bPct != null) {
+    document.getElementById('val-batt-num').textContent = bPct;
+    document.getElementById('batt-num').textContent     = bPct + '%';
+    const fill = document.getElementById('batt-fill');
+    fill.style.width = bPct + '%';
+    fill.style.background = bPct > 50 ? 'var(--green)' : bPct > 20 ? 'var(--yellow)' : 'var(--red)';
+
+    const bv = document.getElementById('val-batt-num');
+    bv.className = 'stat-value ' + (bPct > 50 ? 'green' : bPct > 20 ? 'yellow' : 'red');
+  }
+}
+
+/* =============================================
+   KIRIM PING KE SERVER
+   ============================================= */
+async function sendPing(pos, battPct) {
+  const { latitude, longitude, accuracy, speed } = pos.coords;
+  const body = {
+    device_token: deviceToken,
+    car_id:       carId,
+    car_label:    carLabel,
+    lat:          latitude,
+    lng:          longitude,
+    accuracy:     accuracy,
+    speed:        speed != null ? speed * 3.6 : 0,
+    battery:      battPct,
+  };
+
+  try {
+    const res = await fetch(SERVER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      pingCount++;
+      document.getElementById('ping-count').textContent = pingCount;
+      setStatus('online', '✅ Online – Lokasi Terkirim');
+      addLog(`Ping #${pingCount} OK – Lat:${latitude.toFixed(5)}, Lng:${longitude.toFixed(5)}`, 'ok');
+    } else {
+      const txt = await res.text();
+      setStatus('offline', '❌ Server Error');
+      addLog(`Ping gagal (${res.status}): ${txt.slice(0,80)}`, 'err');
+    }
+  } catch (e) {
+    setStatus('offline', '❌ Tidak ada koneksi');
+    addLog('Gagal terhubung: ' + e.message, 'err');
+  }
+}
+
+/* =============================================
+   AMBIL BATERAI
+   ============================================= */
+async function getBattery() {
+  try {
+    if (!navigator.getBattery) return null;
+    const bat = await navigator.getBattery();
+    return Math.round(bat.level * 100);
+  } catch { return null; }
+}
+
+/* =============================================
+   EVENT-DRIVEN PING (LIVE TRACKING)
+   ============================================= */
+async function handlePositionChange(pos) {
+  currentPos = pos;
+  const now = Date.now();
+  
+  // Throttle ping maksimal tiap 2 detik untuk menghindari spam
+  if (isPinging || (now - lastPingTime < 2000)) {
+    return;
+  }
+
+  isPinging = true;
+  lastPingTime = now;
+
+  const batt = await getBattery();
+  updateUI(currentPos, batt);
+  await sendPing(currentPos, batt);
+  
+  isPinging = false;
+}
+
+/* =============================================
+   START TRACKING
+   ============================================= */
+function startTracking() {
+  deviceToken = document.getElementById('inp-token').value.trim();
+  carId       = document.getElementById('inp-carid').value.trim();
+  carLabel    = document.getElementById('inp-label').value.trim() || 'Mobil ' + carId;
+
+  if (!deviceToken || !carId) {
+    alert('Token dan ID Mobil harus diisi!');
+    return;
+  }
+
+  // Simpan ke localStorage supaya tidak perlu isi lagi saat reload
+  localStorage.setItem('smy_tracker_token', deviceToken);
+  localStorage.setItem('smy_tracker_carid', carId);
+  localStorage.setItem('smy_tracker_label', carLabel);
+
+  // Tampilkan tracker screen
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('tracker-screen').style.display = 'flex';
+
+  document.getElementById('display-label').textContent   = carLabel;
+  document.getElementById('car-name-display').textContent = carLabel;
+  document.getElementById('car-token-display').textContent = 'token: ' + deviceToken.slice(0,8) + '...';
+
+  addLog('Tracker dimulai. Menunggu sinyal GPS...', 'info');
+  setStatus('waiting', '⏳ Menunggu GPS...');
+
+  // Wake Lock supaya layar tidak mati
+  if ('wakeLock' in navigator) {
+    navigator.wakeLock.request('screen').catch(() => {});
+  }
+
+  // GPS watch
+  if (!navigator.geolocation) {
+    setStatus('offline', '❌ GPS tidak didukung');
+    addLog('Browser tidak mendukung Geolocation.', 'err');
+    return;
+  }
+
+  watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      handlePositionChange(pos);
+    },
+    (err) => {
+      setStatus('offline', '❌ GPS Error: ' + err.message);
+      addLog('GPS error: ' + err.message, 'err');
+    },
+    { enableHighAccuracy: true, timeout: GPS_TIMEOUT_MS, maximumAge: 0 }
+  );
+}
+
+/* =============================================
+   EVENT LISTENERS
+   ============================================= */
+document.getElementById('btn-start').addEventListener('click', startTracking);
+
+// Auto-fill dari localStorage jika ada
+const savedToken = localStorage.getItem('smy_tracker_token');
+const savedCarId = localStorage.getItem('smy_tracker_carid');
+const savedLabel = localStorage.getItem('smy_tracker_label');
+if (savedToken && !params.get('token')) {
+  document.getElementById('inp-token').value = savedToken;
+  document.getElementById('inp-carid').value = savedCarId || '';
+  document.getElementById('inp-label').value = savedLabel || '';
+}
+
+// Auto-start jika param sudah lengkap di URL
+if (params.get('token') && params.get('car_id') && params.get('autostart') === '1') {
+  window.addEventListener('load', () => {
+    setTimeout(startTracking, 500);
+  });
+}
+
+// Visibility change – lanjut tracking optimal
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && currentPos) {
+    addLog('App aktif kembali, status standby...', 'info');
+  }
+});
+</script>
+
+</body>
+</html>

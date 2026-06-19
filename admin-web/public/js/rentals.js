@@ -1,27 +1,75 @@
 /* ===== RENTALS MODULE ===== */
 let allRentals = [];
 
-async function loadRentals(page = 1) {
+let rentalsLastHash = '';
+let rentalsPollTimer = null;
+
+async function loadRentals(page = 1, silent = false) {
   rentalsPage = page;
-  document.getElementById('rentals-loading').style.display = 'flex';
-  
+  if (!silent) document.getElementById('rentals-loading').style.display = 'flex';
+
   // Fetch rentals and cars in parallel to map car details
   const [res, carsRes] = await Promise.all([
     Rentals.listAll().catch(() => Rentals.list()),
-    Cars.list()
+    Cars.listAll() // Menggunakan listAll untuk mengambil semua mobil
   ]);
-  
-  document.getElementById('rentals-loading').style.display = 'none';
-  allRentals = extractList(res);
+
+  if (!silent) document.getElementById('rentals-loading').style.display = 'none';
+
+  let newRentals = extractList(res);
   const cars = extractList(carsRes);
-  
-  // Attach car data to rentals since API returns data_car_id
-  allRentals.forEach(r => {
-    r.car = cars.find(c => c.id === r.data_car_id) || {};
+
+  // Map cars to rentals
+  newRentals = newRentals.map(r => {
+    const cid = r.data_car_id || r.car_id || r.id_mobil || r.mobil_id || r.vehicle_id || r.id_kendaraan;
+    if (!r.car && !r.mobil && cid) {
+      r.car = cars.find(c => String(c.id) === String(cid)) || {};
+    }
+    return r;
   });
 
-  setupRentalFilters();
+  const newHash = JSON.stringify(newRentals);
+  if (silent && newHash === rentalsLastHash) {
+    return; // Tidak ada perubahan, lewati render
+  }
+  
+  rentalsLastHash = newHash;
+  allRentals = newRentals;
+  window.globalRentals = newRentals;
+
+  updateRentalStats();
+  if (!silent) setupRentalFilters();
   renderRentals();
+}
+
+function updateRentalStats() {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const totalToday = allRentals.filter(r => (r.start_date || '').startsWith(todayStr) || (r.end_date || '').startsWith(todayStr)).length;
+  const pending = allRentals.filter(r => {
+    const s = (r.status || r.reservations_status || r.payment_status || 'pending').toLowerCase();
+    const pm = (r.payment_method || (r.payment && r.payment.payment_method) || '').toLowerCase();
+    const isCash = (pm === 'cash' || pm === 'tunai' || s === 'pending_cash');
+    if (isCash && (s.includes('pending') || s.includes('waiting') || s === 'pending_cash')) return true;
+    return s.includes('waiting') || s.includes('pending');
+  }).length;
+  const active = allRentals.filter(r => {
+    const s = (r.status || r.reservations_status || r.payment_status || 'pending').toLowerCase();
+    return s === 'active' || s === 'ongoing' || s === 'on-going' || s === 'sedang disewa' || s.includes('jalan');
+  }).length;
+  const income = allRentals.reduce((sum, r) => {
+    const s = (r.status || r.reservations_status || r.payment_status || 'pending').toLowerCase();
+    if (s === 'active' || s === 'ongoing' || s === 'completed' || s === 'approved' || s === 'confirmed' || s.includes('konfirmasi') || s.includes('disetujui') || s.includes('selesai')) {
+      return sum + (Number(r.total_price) || 0);
+    }
+    return sum;
+  }, 0);
+
+  if (document.getElementById('rentals-stat-today')) {
+    document.getElementById('rentals-stat-today').textContent = totalToday;
+    document.getElementById('rentals-stat-pending').textContent = pending;
+    document.getElementById('rentals-stat-active').textContent = active;
+    document.getElementById('rentals-stat-income').textContent = formatRp(income);
+  }
 }
 
 function getFilteredRentals() {
@@ -30,7 +78,19 @@ function getFilteredRentals() {
     const name = (r.user?.name || r.name || '').toLowerCase();
     const car = (r.car?.name || r.car?.brand || '').toLowerCase();
     const code = String(r.id || '').toLowerCase();
-    return !q || name.includes(q) || car.includes(q) || code.includes(q);
+    const matchQ = !q || name.includes(q) || car.includes(q) || code.includes(q);
+
+    // Status matching
+    const rawStatus = (r.status || r.reservations_status || r.payment_status || 'pending').toLowerCase();
+    let normStatus = 'pending';
+    if (rawStatus === 'approved' || rawStatus === 'confirmed' || rawStatus.includes('konfirmasi') || rawStatus.includes('disetujui')) normStatus = 'approved';
+    else if (rawStatus === 'active' || rawStatus === 'ongoing' || rawStatus === 'on-going' || rawStatus === 'sedang disewa' || rawStatus.includes('jalan')) normStatus = 'active';
+    else if (rawStatus === 'completed' || rawStatus.includes('selesai')) normStatus = 'completed';
+    else if (rawStatus === 'cancelled' || rawStatus.includes('batal') || rawStatus === 'failed') normStatus = 'cancelled';
+
+    const matchStatus = !rentalStatusFilter || normStatus === rentalStatusFilter.toLowerCase();
+
+    return matchQ && matchStatus;
   });
 }
 
@@ -44,32 +104,130 @@ function renderRentals() {
     document.getElementById('rentals-pagination').innerHTML = '';
     return;
   }
-  tbody.innerHTML = slice.map((r, i) => `<tr>
-    <td style="color:#94a3b8;font-size:12px;">#${r.id || (start + i + 1)}</td>
-    <td><div style="display:flex;align-items:center;gap:10px;">
-      <div class="avatar">${avatarLetter(r.user?.name || r.name || 'U')}</div>
-      <div>
-        <div style="font-weight:600;font-size:13px;">${r.user?.name || r.name || 'Pengguna #' + r.user_id}</div>
-        <div style="font-size:11px;color:#94a3b8;">${r.user?.email || r.email || ''}</div>
+  tbody.innerHTML = slice.map((r, i) => {
+    const end = new Date(r.end_date); end.setHours(0, 0, 0, 0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const st1 = (r.status || '').toLowerCase();
+    const st2 = (r.reservations_status || '').toLowerCase();
+    const st3 = (r.payment_status || '').toLowerCase();
+    const stAll = st1 + ' ' + st2 + ' ' + st3;
+    
+    const isPending = stAll.includes('pending') || stAll.includes('waiting') || stAll.includes('menunggu') || (!st1 && !st2);
+    const isApproved = stAll.includes('approved') || stAll.includes('confirmed') || stAll.includes('disetujui') || stAll.includes('konfirmasi') || stAll.includes('lunas') || stAll.includes('paid') || stAll.includes('dibayar');
+    const isOngoing = stAll.includes('active') || stAll.includes('ongoing') || stAll.includes('on-going') || stAll.includes('jalan');
+
+    let countdownText = '';
+    let bgStyle = '';
+    if (isOngoing) {
+      const diffTime = end - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) {
+        countdownText = `<div class="text-overdue">Terlambat ${Math.abs(diffDays)} Hari</div>`;
+        bgStyle = 'background-color:#fef2f2; border-left: 3px solid #ef4444;';
+      } else if (diffDays === 0) {
+        countdownText = `<div class="text-today">Selesai Hari Ini</div>`;
+      }
+    }
+
+    const customerName = r.user?.name || r.customer_name || r.name || 'Tanpa Nama';
+    const customerEmail = r.user?.email || r.customer_email || r.email || '-';
+    const customerPhone = r.user?.phone || r.user?.phone_number || r.customer_phone || '-';
+    
+    const carObj = r.car || r.mobil || r.vehicle;
+
+    const pm = (r.payment_method || (r.payment && r.payment.payment_method) || (r.payments && r.payments.length ? r.payments[0].payment_method : '') || '').toLowerCase();
+    
+    // Quick check if there is a proof of payment image
+    const pData = r.payment || (r.payments && r.payments.length ? r.payments[0] : null);
+    let hasProof = false;
+    if (pData) {
+      let payloadProof = null;
+      if (pData.payload) {
+        try {
+          const payloadObj = typeof pData.payload === 'string' ? JSON.parse(pData.payload) : pData.payload;
+          payloadProof = payloadObj.proof_of_payment || payloadObj.bukti_pembayaran || payloadObj.bukti_transfer || payloadObj.receipt || payloadObj.image || payloadObj.file || payloadObj.attachment;
+          if (!payloadProof) {
+            for (let key in payloadObj) {
+              if (typeof payloadObj[key] === 'string' && (payloadObj[key].includes('.jpg') || payloadObj[key].includes('.png') || payloadObj[key].includes('.jpeg') || payloadObj[key].includes('storage/') || payloadObj[key].startsWith('http'))) {
+                payloadProof = payloadObj[key]; break;
+              }
+            }
+          }
+        } catch (e) {}
+      }
+      if (pData.proof_of_payment || pData.bukti_pembayaran || pData.payment_proof || pData.receipt || pData.image || pData.bukti_transfer || pData.file || pData.attachment || payloadProof) hasProof = true;
+      if (!hasProof) {
+        for (let key in pData) {
+          if (typeof pData[key] === 'string' && (pData[key].includes('.jpg') || pData[key].includes('.png') || pData[key].includes('.jpeg') || pData[key].includes('storage/') || pData[key].startsWith('http'))) {
+            hasProof = true; break;
+          }
+        }
+      }
+    }
+    if (!hasProof) {
+      if (r.proof_of_payment || r.bukti_pembayaran || r.payment_proof || r.receipt || r.bukti_transfer || r.file || r.attachment) hasProof = true;
+      if (!hasProof) {
+        for (let key in r) {
+          if (typeof r[key] === 'string' && key !== 'ktp' && key !== 'sim' && key !== 'foto_ktp' && key !== 'foto_sim' && key !== 'image_ktp' && key !== 'image_sim' && key !== 'avatar' && key !== 'photo' && key !== 'image' && key !== 'foto') {
+            if (r[key].includes('.jpg') || r[key].includes('.png') || r[key].includes('.jpeg') || r[key].includes('storage/')) {
+              hasProof = true; break;
+            }
+          }
+        }
+      }
+    }
+    
+    let pmBadge = '';
+    if (pm === 'transfer' || pm === 'qris' || (hasProof && pm === 'cash')) {
+      const displayPm = (pm === 'transfer' || pm === 'qris') ? pm.toUpperCase() : 'TRANSFER (Struk)';
+      pmBadge = `<div style="font-size:10px; font-weight:700; color:#3b82f6; margin-top:4px;"><i class="fas fa-university"></i> ${displayPm}</div>`;
+    } else if (pm === 'cash' || pm === 'tunai') {
+      pmBadge = '<div style="font-size:10px; font-weight:700; color:#10b981; margin-top:4px;"><i class="fas fa-money-bill-wave"></i> CASH</div>';
+    }
+
+    return `<tr style="${bgStyle}">
+    <td><span style="color:#94a3b8;font-size:13px;">#${r.id || (start + i + 1)}</span></td>
+    <td>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div class="avatar bg-primary" style="color:white;">${avatarLetter(customerName)}</div>
+        <div>
+          <div style="font-weight:600;color:var(--text-main);">${customerName}</div>
+          <div style="font-size:12px;color:var(--text-sub);">${customerEmail}</div>
+          ${customerPhone !== '-' ? `<div style="font-size:12px;color:var(--text-sub);">${customerPhone}</div>` : ''}
+        </div>
       </div>
-    </div></td>
-    <td><div style="font-weight:600;">${r.car?.name_car || r.car?.name || '-'}</div>
-      <div style="font-size:11px;color:#94a3b8;">${r.car?.plate_number || r.car?.plat || ''}</div>
     </td>
-    <td>${formatDate(r.start_date)}</td>
-    <td>${formatDate(r.end_date)}</td>
-    <td style="font-weight:700;color:#f97316;">${formatRp(r.total_price)}</td>
-    <td>${statusBadge(r.reservations_status || r.payment_status || 'pending')}</td>
+    <td>
+      <div style="font-weight:600;">${carDisplayName(carObj)}</div>
+      <div style="font-size:12px;color:var(--text-sub);">${carObj ? (carObj.plate_number || carObj.plat_nomor || carObj.nomor_polisi || '-') : '-'}</div>
+    </td>
+    <td>${formatDate(r.start_date, false)}</td>
+    <td>${formatDate(r.end_date, false)} ${countdownText}</td>
+    <td>
+      <div style="font-weight:700;color:#f97316;">${formatRp(r.total_price)}</div>
+      ${pmBadge}
+    </td>
+    <td>${statusBadge(r)}</td>
     <td>
       <div style="display:flex;gap:6px;">
         <button class="btn btn-secondary btn-icon btn-sm" title="Detail" onclick="viewRental(${r.id})"><i class="fas fa-eye"></i></button>
-        ${(r.reservations_status === 'pending' || !r.reservations_status) ? `
+        ${(stAll.includes('pending_cash')) ? `
+          <button class="btn btn-primary btn-icon btn-sm" title="Konfirmasi Cash" onclick="confirmCash(${r.id})"><i class="fas fa-money-bill-wave"></i></button>
+          <button class="btn btn-danger btn-icon btn-sm" title="Batalkan" onclick="rejectRental(${r.id})"><i class="fas fa-times"></i></button>
+        ` : (isPending) ? `
           <button class="btn btn-success btn-icon btn-sm" title="Setujui" onclick="approveRental(${r.id})"><i class="fas fa-check"></i></button>
           <button class="btn btn-danger btn-icon btn-sm" title="Tolak" onclick="rejectRental(${r.id})"><i class="fas fa-times"></i></button>
         ` : ''}
+        ${(isApproved) ? `
+          <button class="btn btn-success btn-icon btn-sm" title="Mulai Sewa" onclick="startReserv(${r.id})"><i class="fas fa-key"></i></button>
+        ` : ''}
+        ${(isOngoing) ? `
+          <button class="btn btn-info btn-icon btn-sm" title="Selesai Sewa" onclick="endReserv(${r.id})"><i class="fas fa-flag-checkered"></i></button>
+        ` : ''}
       </div>
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
   renderPagination('rentals-pagination', filtered.length, rentalsPage, PER_PAGE, 'loadRentals');
 }
 
@@ -85,85 +243,520 @@ function setupRentalFilters() {
   });
 }
 
-window.viewRental = async function(id) {
-  openModal('rental-modal-overlay');
-  document.getElementById('rental-detail-body').innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner"></div></div>';
-  document.getElementById('rental-detail-actions').innerHTML = '';
-  const res = await Rentals.get(id);
-  const r = res?.data?.data || res?.data || {};
-  const car = r.car || {};
-  const user = r.user || {};
-  const img = imgUrl(car.image || car.photo);
+// ==== RENDER BADGE STATUS CERDAS (BISA CEK PAYMENT METHOD) ====
+function carDisplayName(car) {
+  if (!car) return '-';
+  const brand = car.brand || car.merk || car.merk_mobil || '';
+  const name = car.name_car || car.name || car.nama || car.model || car.nama_mobil || '';
+  return `${brand} ${name}`.trim() || '-';
+}
 
-  document.getElementById('rental-detail-body').innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
-      <div>
-        <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:8px;">Pelanggan</div>
+function statusBadge(r) {
+  if(!r) return '-';
+  
+  if (typeof r === 'string') {
+    const l = r.toLowerCase();
+    if(l === 'pending_cash') return '<span class="badge-pill pill-warning">Menunggu Cash</span>';
+    if(l.includes('waiting') || l.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
+    if(l === 'approved') return '<span class="badge-pill pill-primary">Disetujui</span>';
+    if(l === 'active' || l === 'ongoing') return '<span class="badge-pill pill-success">Sedang Jalan</span>';
+    if(l === 'completed' || l === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
+    if(l === 'cancelled' || l === 'dibatalkan' || l === 'failed') return '<span class="badge-pill pill-danger">Dibatalkan</span>';
+    return `<span class="badge-pill pill-secondary">${r.toUpperCase()}</span>`;
+  }
+  
+  const st = (r.status || r.reservations_status || r.payment_status || 'pending').toLowerCase();
+  const pm = (r.payment_method || (r.payment && r.payment.payment_method) || '').toLowerCase();
+  
+  const isCash = (pm === 'cash' || pm === 'tunai' || st === 'pending_cash');
+  
+  if (isCash && (st.includes('pending') || st.includes('waiting') || st === 'pending_cash')) {
+    return '<span class="badge-pill pill-warning">Menunggu Cash</span>';
+  }
+  
+  if(st.includes('waiting') || st.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
+  if(st === 'approved' || st === 'confirmed' || st.includes('konfirmasi') || st.includes('disetujui')) return '<span class="badge-pill pill-primary">Dikonfirmasi</span>';
+  if(st === 'active' || st === 'ongoing' || st === 'on-going' || st === 'sedang disewa' || st.includes('jalan')) return '<span class="badge-pill pill-success">Sedang Jalan</span>';
+  if(st === 'completed' || st === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
+  if(st === 'cancelled' || st === 'dibatalkan' || st === 'failed') return '<span class="badge-pill pill-danger">Dibatalkan</span>';
+  
+  const rawStatus = r.status || r.reservations_status || r.payment_status || 'UNKNOWN';
+  return `<span class="badge-pill pill-secondary">${String(rawStatus).toUpperCase()}</span>`;
+}
+
+window.viewRental = async function (id) {
+  const r = allRentals.find(x => String(x.id) === String(id)) || {};
+  const car = r.car || r.mobil || r.vehicle || {};
+  const user = r.user || {};
+  const img = imgUrl(car.image || car.photo || car.foto);
+  const pm = (r.payment_method || (r.payment && r.payment.payment_method) || (r.payments && r.payments.length ? r.payments[0].payment_method : '') || '').toLowerCase();
+
+  const ktpUrl = imgUrl(r.ktp || r.foto_ktp || r.image_ktp || user.ktp || user.foto_ktp || user.image_ktp);
+  const simUrl = imgUrl(r.sim || r.foto_sim || r.image_sim || user.sim || user.foto_sim || user.image_sim);
+
+  // Payment proofs
+  let paymentHtml = '';
+  let proofPath = null;
+  
+  const pData = r.payment || (r.payments && r.payments.length ? r.payments[0] : null);
+
+  if (pData) {
+    let payloadProof = null;
+    if (pData.payload) {
+      try {
+        const payloadObj = typeof pData.payload === 'string' ? JSON.parse(pData.payload) : pData.payload;
+        payloadProof = payloadObj.proof_of_payment || payloadObj.bukti_pembayaran || payloadObj.bukti_transfer || payloadObj.receipt || payloadObj.image || payloadObj.file || payloadObj.attachment;
+        if (!payloadProof) {
+          for (let key in payloadObj) {
+            if (typeof payloadObj[key] === 'string' && (payloadObj[key].includes('.jpg') || payloadObj[key].includes('.png') || payloadObj[key].includes('.jpeg') || payloadObj[key].includes('storage/') || payloadObj[key].startsWith('http'))) {
+              payloadProof = payloadObj[key];
+              break;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    proofPath = pData.proof_of_payment || pData.bukti_pembayaran || pData.payment_proof || pData.receipt || pData.image || pData.image_pembayaran || pData.bukti_transfer || pData.file || pData.attachment || payloadProof;
+    if (!proofPath) {
+      for (let key in pData) {
+        if (typeof pData[key] === 'string' && (pData[key].includes('.jpg') || pData[key].includes('.png') || pData[key].includes('.jpeg') || pData[key].includes('storage/') || pData[key].startsWith('http'))) {
+          proofPath = pData[key];
+          break;
+        }
+      }
+    }
+  }
+  if (!proofPath) {
+    proofPath = r.proof_of_payment || r.bukti_pembayaran || r.payment_proof || r.receipt || r.image_pembayaran || r.bukti_transfer || r.file || r.attachment;
+    if (!proofPath) {
+      for (let key in r) {
+        if (typeof r[key] === 'string' && key !== 'ktp' && key !== 'sim' && key !== 'foto_ktp' && key !== 'foto_sim' && key !== 'image_ktp' && key !== 'image_sim' && key !== 'avatar' && key !== 'photo' && key !== 'image' && key !== 'foto') {
+          if (r[key].includes('.jpg') || r[key].includes('.png') || r[key].includes('.jpeg') || r[key].includes('storage/')) {
+            proofPath = r[key];
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (proofPath) {
+    const pf = imgUrl(proofPath);
+    paymentHtml = `<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px;">
+      <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:8px;">Bukti Pembayaran</div>
+      <div class="proof-card">
+        <img src="${pf}" onclick="openImageModal('${pf}')">
+        <span>Struk Transfer</span>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('rental-drawer-content').innerHTML = `
+    <div style="padding:24px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px;">
+        <div>
+          <h2 style="margin:0 0 4px 0; font-size:24px;">#${r.id}</h2>
+          <div style="color:#64748b; font-size:13px;">Dibuat: ${formatDate(r.created_at, false)}</div>
+        </div>
+        ${statusBadge(r)}
+      </div>
+      
+      <div style="background:white; padding:16px; border-radius:12px; border:1px solid var(--border); margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:12px;">Pelanggan</div>
         <div style="display:flex;align-items:center;gap:12px;">
-          <div class="avatar" style="width:44px;height:44px;font-size:16px;">${avatarLetter(user.name || 'U')}</div>
+          <div class="avatar" style="width:48px;height:48px;font-size:18px;">${avatarLetter(user.name || 'U')}</div>
           <div>
-            <div style="font-weight:700;">${user.name || '-'}</div>
-            <div style="font-size:12px;color:#64748b;">${user.email || ''}</div>
-            <div style="font-size:12px;color:#64748b;">${user.phone || user.no_hp || ''}</div>
+            <div style="font-weight:700; font-size:15px;">${user.name || '-'}</div>
+            <div style="font-size:13px;color:#64748b;">${user.email || ''}</div>
+            <div style="font-size:13px;color:#64748b;">${user.phone || user.no_hp || '-'}</div>
           </div>
         </div>
+        
+        ${(ktpUrl || simUrl) ? `
+        <div class="proof-image-grid">
+          ${ktpUrl ? `<div class="proof-card"><img src="${ktpUrl}" onclick="openImageModal('${ktpUrl}')"><span>KTP</span></div>` : ''}
+          ${simUrl ? `<div class="proof-card"><img src="${simUrl}" onclick="openImageModal('${simUrl}')"><span>SIM</span></div>` : ''}
+        </div>` : ''}
       </div>
-      <div>
-        <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:8px;">Kendaraan</div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          ${img ? `<img src="${img}" style="width:64px;height:48px;object-fit:cover;border-radius:8px;">` : `<div class="car-img-placeholder"><i class="fas fa-car"></i></div>`}
+
+      <div style="background:white; padding:16px; border-radius:12px; border:1px solid var(--border); margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:12px;">Kendaraan & Waktu</div>
+        <div style="display:flex;align-items:center;gap:12px; margin-bottom:16px;">
+          ${img ? `<img src="${img}" style="width:72px;height:52px;object-fit:cover;border-radius:6px;">` : `<div class="car-img-placeholder" style="width:72px;height:52px;font-size:24px;"><i class="fas fa-car"></i></div>`}
           <div>
-            <div style="font-weight:700;">${car.name || car.brand || '-'}</div>
-            <div style="font-size:12px;color:#64748b;">${car.license_plate || car.plat || ''}</div>
+            <div style="font-weight:700; font-size:15px;">${car.name || car.brand || '-'}</div>
+            <div style="font-size:13px;color:#64748b; font-family:monospace;">${car.license_plate || car.plat || '-'}</div>
           </div>
         </div>
+        
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          ${row('Mulai Sewa', formatDate(r.start_date, false))}
+          ${row('Selesai Sewa', formatDate(r.end_date, false))}
+        </div>
       </div>
-    </div>
-    <div style="background:#f8fafc;border-radius:12px;padding:16px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        ${row('Kode Booking', '#' + r.id)}
-        ${row('Status', statusBadge(r.status))}
-        ${row('Tanggal Mulai', formatDate(r.start_date || r.rental_start))}
-        ${row('Tanggal Selesai', formatDate(r.end_date || r.rental_end))}
-        ${row('Durasi', (r.duration || '-') + ' hari')}
-        ${row('Total Biaya', `<span style="font-weight:700;color:#f97316;">${formatRp(r.total_price || r.total_amount)}</span>`)}
-        ${row('Pembayaran', ucFirst(r.payment_method || r.metode_bayar || '-'))}
-        ${row('Dibuat', formatDateTime(r.created_at))}
+      
+      <div style="background:white; padding:16px; border-radius:12px; border:1px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid #f1f5f9;">
+          <div style="font-size:13px; color:#64748b;">Metode Pembayaran</div>
+          <div style="font-size:13px; font-weight:700; color:#334155; text-transform:uppercase;">
+            ${(pm === 'transfer' || pm === 'qris' || (proofPath && pm === 'cash')) ? `<i class="fas fa-university" style="color:#3b82f6;margin-right:4px;"></i> ${(pm === 'transfer' || pm === 'qris') ? pm : 'TRANSFER (STRUK)'}` : (pm === 'cash' || pm === 'tunai' ? '<i class="fas fa-money-bill-wave" style="color:#10b981;margin-right:4px;"></i> CASH' : (pm || '-'))}
+          </div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-size:13px; color:#64748b;">Total Pembayaran</div>
+          <div style="font-size:20px; font-weight:800; color:var(--primary);">${formatRp(r.total_price)}</div>
+        </div>
+        ${paymentHtml}
       </div>
-      ${r.notes || r.catatan ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0;"><div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:4px;">CATATAN</div><div style="font-size:13px;">${r.notes || r.catatan}</div></div>` : ''}
     </div>
   `;
 
-  const actions = document.getElementById('rental-detail-actions');
-  actions.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('rental-modal-overlay')">Tutup</button>`;
-  
-  if (r.reservations_status === 'pending' || !r.reservations_status) {
-    actions.innerHTML += `
+  const actions = document.getElementById('rental-drawer-actions');
+  const st1 = (r.status || '').toLowerCase();
+  const st2 = (r.reservations_status || '').toLowerCase();
+  const st3 = (r.payment_status || '').toLowerCase();
+  const stAll = st1 + ' ' + st2 + ' ' + st3;
+  const paySt = st3;
+
+  const isPending = stAll.includes('pending') || stAll.includes('waiting') || stAll.includes('menunggu') || (!st1 && !st2);
+  const isApproved = stAll.includes('approved') || stAll.includes('disetujui') || stAll.includes('konfirmasi') || stAll.includes('lunas') || stAll.includes('paid') || stAll.includes('dibayar');
+  const isOngoing = stAll.includes('active') || stAll.includes('ongoing') || stAll.includes('on-going') || stAll.includes('jalan');
+  const isCancelled = stAll.includes('cancelled') || stAll.includes('batal') || stAll.includes('dibatalkan');
+
+  let actionHtml = '';
+
+  if (stAll.includes('pending_cash')) {
+    actionHtml += `
+      <button class="btn btn-danger" onclick="rejectRental(${r.id},true)"><i class="fas fa-times"></i> Batalkan</button>
+      <button class="btn btn-primary" onclick="confirmCash(${r.id})"><i class="fas fa-money-bill-wave"></i> Konfirmasi Cash</button>
+    `;
+  } else if (isPending) {
+    actionHtml += `
       <button class="btn btn-danger" onclick="rejectRental(${r.id},true)"><i class="fas fa-times"></i> Tolak</button>
-      <button class="btn btn-success" onclick="approveRental(${r.id},true)"><i class="fas fa-check"></i> Setujui</button>`;
+      <button class="btn btn-success" onclick="approveRental(${r.id},true)"><i class="fas fa-check"></i> Setujui</button>
+    `;
   }
+
+  if (isApproved) {
+    if (paySt !== 'paid') {
+      actionHtml += `<button class="btn btn-primary" onclick="confirmCash(${r.id})"><i class="fas fa-money-bill-wave"></i> Konfirmasi Cash</button>`;
+    }
+    actionHtml += `<button class="btn btn-success" onclick="startReserv(${r.id})"><i class="fas fa-key"></i> Mulai Sewa</button>`;
+  }
+
+  if (isOngoing) {
+    actionHtml += `
+      <button class="btn btn-success" style="flex: 2; justify-content: center; font-size: 14px; padding: 12px;" onclick="endReserv(${r.id})"><i class="fas fa-flag-checkered"></i> Selesai Sewa</button>
+    `;
+  }
+
+  if (isCancelled && paySt === 'paid') {
+    actionHtml += `<button class="btn btn-warning" onclick="approveRefund(${r.id})"><i class="fas fa-undo"></i> Konfirmasi Refund</button>`;
+  }
+
+  if (!actionHtml.trim()) {
+    actions.style.display = 'none';
+  } else {
+    actions.style.display = 'flex';
+  }
+  actions.innerHTML = actionHtml;
+
+  document.getElementById('rental-detail-overlay').classList.add('open');
+  document.getElementById('rental-detail-drawer').classList.add('open');
+  document.body.style.overflow = 'hidden';
+};
+
+window.closeRentalDetail = function () {
+  document.getElementById('rental-detail-overlay').classList.remove('open');
+  document.getElementById('rental-detail-drawer').classList.remove('open');
+  document.body.style.overflow = '';
 };
 
 function row(label, value) {
   return `<div><div style="font-size:11px;color:#94a3b8;font-weight:600;margin-bottom:2px;">${label}</div><div style="font-size:13px;font-weight:500;">${value}</div></div>`;
 }
 
-window.approveRental = async function(id, fromModal = false) {
+window.approveRental = async function (id, fromModal = false) {
+  const target = allRentals.find(x => String(x.id) === String(id));
+  if (target) {
+    const cid = target.data_car_id || target.car_id || target.id_mobil || target.mobil_id || target.vehicle_id || target.id_kendaraan;
+    const start = new Date(target.start_date).getTime();
+    const end = new Date(target.end_date).getTime();
+
+    if (cid && start && end) {
+      // Cek apakah mobil ini sudah dipakai di reservasi lain pada tanggal yang tumpang tindih
+      const overlap = allRentals.find(x => {
+        if (String(x.id) === String(id)) return false; // Jangan cek diri sendiri
+        
+        const xcid = x.data_car_id || x.car_id || x.id_mobil || x.mobil_id || x.vehicle_id || x.id_kendaraan;
+        if (String(xcid) !== String(cid)) return false; // Beda mobil
+
+        const st = (x.status || x.reservations_status || x.payment_status || '').toLowerCase();
+        // Hanya peduli dengan reservasi yang SUDAH DISETUJUI / BERJALAN
+        if (st !== 'approved' && st !== 'confirmed' && st !== 'active' && st !== 'ongoing' && st !== 'on-going' && st !== 'sedang disewa' && !st.includes('jalan')) return false;
+
+        const xstart = new Date(x.start_date).getTime();
+        const xend = new Date(x.end_date).getTime();
+        
+        // Logika tumpang tindih waktu
+        return (start <= xend) && (end >= xstart);
+      });
+
+      if (overlap) {
+        alert(`Gagal (Double Booking)\nMobil ini sudah disewa (Reservasi #${overlap.id}) pada tanggal tersebut! Harap tolak reservasi ini atau hubungi pelanggan.`);
+        return; // Hentikan proses persetujuan
+      }
+    }
+  }
+
   confirmAction('Setujui Reservasi', 'Apakah Anda yakin ingin menyetujui reservasi ini?', async () => {
-    // Attempt to update status if endpoint exists
-    const res = await Rentals.updateStatus(id, 'approved').catch(()=>({ok:true}));
-    toast('Reservasi disetujui!'); 
-    if (fromModal) closeModal('rental-modal-overlay'); 
-    loadRentals(rentalsPage);
+    const res = await Rentals.approve(id);
+    if (res?.ok) {
+      toast('Reservasi disetujui!');
+      
+      // Sinkronisasi status mobil ke database secara otomatis
+      if (target) {
+        const cid = target.data_car_id || target.car_id || target.id_mobil || target.mobil_id || target.vehicle_id || target.id_kendaraan;
+        const car = allCars.find(c => String(c.id) === String(cid));
+        if (car) {
+          const payload = {
+            name_car: car.name_car || '', plate_number: car.plate_number || '', year_of_car: car.year_of_car || '',
+            price: car.price || '', passenger_capacity: car.passenger_capacity || '', transmisi: car.transmisi || '',
+            kategori: car.kategori || '', model: car.model || '', description: car.description || '',
+            availability_status: 'rented', status: 'rented'
+          };
+          apiFetch('/updateCar/' + car.id, { method: 'PUT', body: JSON.stringify(payload) }).catch(e => console.error(e));
+        }
+      }
+
+      if (fromModal) {
+        closeModal('rental-modal-overlay');
+        closeRentalDetail();
+      }
+      loadRentals(rentalsPage);
+    }
+    else toast(res?.data?.message || 'Gagal menyetujui.', 'error');
   }, false);
 };
 
-window.rejectRental = async function(id, fromModal = false) {
-  confirmAction('Tolak Reservasi', 'Apakah Anda yakin ingin menolak/membatalkan reservasi ini?', async () => {
-    const res = await Rentals.cancel(id);
-    if (res?.ok) { toast('Reservasi ditolak.', 'warning'); if (fromModal) closeModal('rental-modal-overlay'); loadRentals(rentalsPage); }
-    else toast(res?.data?.message || 'Gagal menolak.', 'error');
-  });
+window.rejectRental = async function (id, fromModal = false) {
+  document.getElementById('reject-reason-input').value = '';
+  openModal('reject-modal-overlay');
+
+  document.getElementById('btn-submit-reject').onclick = async () => {
+    const reason = document.getElementById('reject-reason-input').value;
+    if (!reason.trim()) { toast('Alasan penolakan wajib diisi!', 'error'); return; }
+
+    const btn = document.getElementById('btn-submit-reject');
+    btn.disabled = true;
+    btn.textContent = 'Memproses...';
+
+    const res = await Rentals.reject(id, reason);
+
+    btn.disabled = false;
+    btn.textContent = 'Tolak Reservasi';
+
+    if (res?.ok) {
+      toast('Reservasi berhasil ditolak.', 'warning');
+      closeModal('reject-modal-overlay');
+      if (fromModal) {
+        closeModal('rental-modal-overlay');
+        closeRentalDetail();
+      }
+      loadRentals(rentalsPage);
+    } else {
+      toast(res?.data?.message || 'Gagal menolak.', 'error');
+    }
+  };
+};
+
+window.confirmCash = async function(id) {
+  const r = allRentals.find(x => String(x.id) === String(id));
+  const tagihan = r ? (Number(r.total_price) || 0) : 0;
+  
+  document.getElementById('cash-modal-tagihan').textContent = formatRp(tagihan);
+  document.getElementById('cash-amount-input').value = '';
+  openModal('cash-modal-overlay');
+
+  document.getElementById('btn-submit-cash').onclick = async () => {
+    const amountStr = document.getElementById('cash-amount-input').value;
+    const amount = parseInt(amountStr.replace(/\D/g, ''), 10);
+    
+    if (isNaN(amount) || amount <= 0) {
+      toast('Jumlah uang tidak valid.', 'error');
+      return;
+    }
+    
+    if (amount < tagihan) {
+      const lanjut = confirm(`Uang yang dimasukkan (${formatRp(amount)}) KURANG dari tagihan (${formatRp(tagihan)}). Tetap lanjutkan?`);
+      if (!lanjut) return;
+    }
+    
+    const btn = document.getElementById('btn-submit-cash');
+    btn.disabled = true;
+    btn.textContent = 'Memproses...';
+    
+    // Coba ambil payment_id, jika tidak ada fallback ke reservation_id
+    const paymentId = (r && r.payment && r.payment.id) ? r.payment.id : id;
+    
+    const res = await Rentals.cashConfirm(paymentId, amount);
+    
+    btn.disabled = false;
+    btn.textContent = 'Konfirmasi Uang';
+    
+    if (res?.ok) {
+      toast('Pembayaran cash berhasil dikonfirmasi!');
+      closeModal('cash-modal-overlay');
+      closeRentalDetail();
+      loadRentals(rentalsPage);
+    } else {
+      toast(res?.data?.message || 'Gagal mengonfirmasi pembayaran cash.', 'error');
+    }
+  };
+};
+
+window.startReserv = async function (id) {
+  const r = allRentals.find(x => String(x.id) === String(id));
+  if (r) {
+    const st3 = (r.payment_status || '').toLowerCase();
+    const pm = (r.payment_method || (r.payment && r.payment.payment_method) || '').toLowerCase();
+    // Aturan: Jika metode pembayaran cash/tunai dan masih pending, tidak bisa mulai sewa
+    if ((pm === 'cash' || pm === 'tunai') && (st3 === 'pending_cash' || st3 === 'pending' || st3 === 'waiting' || st3 === 'unpaid')) {
+      alert('Pelanggan belum melakukan pembayaran Cash. Harap konfirmasi pembayaran Cash terlebih dahulu sebelum memulai reservasi.');
+      return;
+    }
+  }
+
+  confirmAction('Mulai Reservasi', 'Apakah Anda yakin mobil sudah diserahkan dan reservasi dimulai?', async () => {
+    const res = await Rentals.startReserv(id);
+    if (res?.ok) {
+      toast('Reservasi berhasil dimulai!');
+      
+      // Sinkronisasi status mobil ke database secara otomatis
+      const r = allRentals.find(x => String(x.id) === String(id));
+      if (r) {
+        const car = r.car || r.mobil || {};
+        const cid = car.id || r.data_car_id || r.car_id || r.id_mobil || r.mobil_id || r.vehicle_id;
+        
+        if (cid) {
+          // Tunggu sebentar untuk memastikan backend selesai memproses startReserv
+          // dan tidak terjadi race condition di database
+          setTimeout(async () => {
+            const fd = new FormData();
+            fd.append('_method', 'PUT'); // Explicitly add method spoofing in body
+            const fields = ['name_car', 'plate_number', 'year_of_car', 'price', 'passenger_capacity', 'transmisi', 'kategori', 'model', 'description'];
+            fields.forEach(f => {
+              if (car[f]) fd.append(f, car[f]);
+            });
+            fd.append('availability_status', 'rented');
+            fd.append('status', 'rented');
+            
+            await Cars.update(cid, fd).catch(e => console.error('Gagal update status mobil:', e));
+          }, 500);
+        }
+      }
+
+      closeRentalDetail();
+      loadRentals(rentalsPage);
+    } else {
+      toast(res?.data?.message || 'Gagal memulai reservasi.', 'error');
+    }
+  }, false);
+};
+
+window.endReserv = async function (id) {
+  const r = allRentals.find(x => x.id === id);
+  if (!r) return;
+
+  const endDate = new Date(r.end_date);
+  endDate.setHours(23, 59, 59, 999);
+  const today = new Date();
+
+  let title = 'Selesai Reservasi';
+  let msg = 'Apakah Anda yakin mobil sudah dikembalikan dan reservasi diselesaikan?';
+  let danger = false;
+
+  if (today > endDate) {
+    const diffTime = today.getTime() - endDate.getTime();
+    const lateDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    let pricePerDay = 0;
+    if (r.car && (r.car.price_per_day || r.car.price)) {
+      pricePerDay = Number(r.car.price_per_day || r.car.price);
+    } else if (r.total_price) {
+      // Perkiraan kasar jika data mobil tidak ikut terbawa
+      const startD = new Date(r.start_date);
+      const days = Math.ceil(Math.abs(endDate - startD) / (1000 * 60 * 60 * 24)) || 1;
+      pricePerDay = Math.round(r.total_price / days);
+    }
+
+    const fine = lateDays * pricePerDay;
+    title = 'Peringatan Keterlambatan!';
+    danger = true;
+    msg = `Peringatan: Pelanggan TELAT mengembalikan mobil selama ${lateDays} hari!\n\n`;
+    if (fine > 0) {
+      msg += `Estimasi Denda Keterlambatan: Rp ${fine.toLocaleString('id-ID')}\n\n`;
+    }
+    msg += `Pastikan denda telah dibayarkan oleh pelanggan sebelum menekan tombol Lanjutkan.`;
+  }
+
+  confirmAction(title, msg, async () => {
+    const res = await Rentals.endReserv(id);
+    if (res?.ok) {
+      toast('Reservasi berhasil diselesaikan!');
+
+      // Sinkronisasi status mobil ke database secara otomatis
+      if (r) {
+        const car = r.car || r.mobil || {};
+        const cid = car.id || r.data_car_id || r.car_id || r.id_mobil || r.mobil_id || r.vehicle_id;
+        
+        if (cid) {
+          setTimeout(async () => {
+            const fd = new FormData();
+            fd.append('_method', 'PUT');
+            const fields = ['name_car', 'plate_number', 'year_of_car', 'price', 'passenger_capacity', 'transmisi', 'kategori', 'model', 'description'];
+            fields.forEach(f => {
+              if (car[f]) fd.append(f, car[f]);
+            });
+            fd.append('availability_status', 'available');
+            fd.append('status', 'available');
+            
+            await Cars.update(cid, fd).catch(e => console.error('Gagal update status mobil:', e));
+          }, 500);
+        }
+      }
+
+      closeRentalDetail();
+      loadRentals(rentalsPage);
+    } else {
+      toast(res?.data?.message || 'Gagal menyelesaikan reservasi.', 'error');
+    }
+  }, danger);
+};
+
+window.approveRefund = async function (id) {
+  confirmAction('Konfirmasi Refund', 'Apakah Anda sudah mengembalikan dana pelanggan dan ingin mengonfirmasi refund ini?', async () => {
+    const res = await Rentals.approveRefund(id);
+    if (res?.ok) {
+      toast('Refund berhasil dikonfirmasi!');
+      closeRentalDetail();
+      loadRentals(rentalsPage);
+    } else {
+      toast(res?.data?.message || 'Gagal mengonfirmasi refund.', 'error');
+    }
+  }, false);
 };
 
 window.loadRentals = loadRentals;
+
+// ===== REALTIME SILENT POLLING =====
+if (window.rentalsPollTimer) clearInterval(window.rentalsPollTimer);
+window.rentalsPollTimer = setInterval(() => {
+  const page = document.getElementById('rentals-page');
+  // Hanya polling jika halaman reservasi sedang aktif/terbuka
+  if (page && page.style.display !== 'none') {
+    loadRentals(rentalsPage, true);
+  }
+}, 10000); // 10 detik sekali
+
+window.globalRentals = allRentals;

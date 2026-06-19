@@ -1,5 +1,23 @@
 /* ===== GUARD ===== */
-if (!localStorage.getItem('smy_token')) window.location.href = '/login';
+(() => {
+  const token = localStorage.getItem('smy_token');
+  let isAdmin = false;
+  try {
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.role === 'admin' || payload.role === 'Admin') {
+        isAdmin = true;
+      }
+    }
+  } catch(e) {}
+
+  if (!token || !isAdmin) {
+    localStorage.removeItem('smy_token');
+    localStorage.removeItem('smy_user');
+    document.cookie = "smy_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    window.location.href = '/login';
+  }
+})();
 
 /* ===== STATE ===== */
 let currentPage = 'dashboard';
@@ -15,9 +33,11 @@ document.addEventListener('DOMContentLoaded', () => {
   setupNav();
   setupSidebar();
   navigate('dashboard');
-  document.getElementById('refresh-btn').onclick = refreshPage;
   document.getElementById('btn-logout').onclick = doLogout;
   document.getElementById('btn-logout-profile').onclick = doLogout;
+  
+  const profileForm = document.getElementById('profile-edit-form');
+  if (profileForm) profileForm.onsubmit = handleProfileSave;
 });
 
 function setTopbarDate() {
@@ -59,6 +79,7 @@ async function doLogout() {
   await Auth.logout().catch(() => {});
   localStorage.removeItem('smy_token');
   localStorage.removeItem('smy_user');
+  document.cookie = "smy_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   window.location.href = '/login';
 }
 
@@ -81,7 +102,7 @@ function navigate(page) {
   };
   document.getElementById('topbar-title').textContent = titles[page] || page;
   closeSidebar();
-  const loaders = { dashboard: loadDashboard, cars: loadCars, rentals: loadRentals, tracking: loadTracking, customers: loadCustomers };
+  const loaders = { dashboard: loadDashboard, cars: loadCars, rentals: loadRentals, tracking: loadTracking, customers: loadCustomers, profile: loadProfile };
   if (loaders[page]) loaders[page]();
 }
 
@@ -101,8 +122,21 @@ function closeSidebar() {
 }
 
 /* ===== MODAL ===== */
-function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openModal(id) { 
+  document.getElementById(id).classList.add('open'); 
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(id) { 
+  document.getElementById(id).classList.remove('open'); 
+  document.body.style.overflow = '';
+}
+function openImageModal(url) {
+  document.getElementById('image-viewer-img').src = url;
+  openModal('image-viewer-modal');
+}
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.openImageModal = openImageModal;
 
 /* ===== PAGINATION ===== */
 function renderPagination(containerId, total, current, perPage, onChangeFn) {
@@ -139,29 +173,72 @@ function extractList(res) {
 /* ===== DASHBOARD ===== */
 let chartTrend = null, chartFleet = null;
 
-async function loadDashboard() {
-  const [carsRes, rentalsRes] = await Promise.all([
-    Cars.list(),
-    Rentals.listAll().catch(() => Rentals.list()),
-  ]);
+let dashboardLastHash = '';
+let dashboardPollTimer = null;
+
+async function loadDashboard(silent = false) {
+  const carsRes = await Cars.listAll();
+  let rentalsRes = await Rentals.listAll();
+  if (!rentalsRes || !rentalsRes.ok) {
+    rentalsRes = await Rentals.list();
+  }
+  const usersRes = await Users.list('per_page=1'); // Just to get the total length if possible, or all list
 
   const cars    = extractList(carsRes);
   const rentals = extractList(rentalsRes);
+  const users   = extractList(usersRes);
+
+  const newHash = JSON.stringify({ c: cars.length, r: rentals.length, rs: rentals.map(x=>x.status||x.reservations_status), cs: cars.map(x=>x.availability_status) });
+  if (silent && newHash === dashboardLastHash) return;
+  dashboardLastHash = newHash;
 
   const active    = cars.filter(c => carStatus(c) === 'rented').length;
   const avail     = cars.filter(c => carStatus(c) === 'available').length;
-  const pending   = rentals.filter(r => (r.reservations_status || r.payment_status) === 'pending').length;
+  const pending   = rentals.filter(r => {
+    const s = r.reservations_status || r.payment_status || '';
+    return s === 'pending' || s === 'Waiting_payment' || s === 'waiting_payment';
+  }).length;
   const completed = rentals.filter(r => r.reservations_status === 'completed' || r.payment_status === 'paid').length;
 
-  document.getElementById('stat-cars').textContent     = cars.length;
-  document.getElementById('stat-active').textContent   = active;
-  document.getElementById('stat-pending').textContent  = pending;
-  document.getElementById('stat-rentals').textContent  = rentals.length;
-  document.getElementById('stat-completed').textContent = completed;
-  document.getElementById('stat-avail').textContent    = avail;
+  const animateValue = (id, start, end, duration) => {
+    const obj = document.getElementById(id);
+    if (!obj) return;
+    if (silent) { obj.textContent = end; return; }
+    let startTimestamp = null;
+    const step = (timestamp) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      // easeOutQuart
+      const ease = 1 - Math.pow(1 - progress, 4);
+      obj.innerHTML = Math.floor(ease * (end - start) + start);
+      if (progress < 1) window.requestAnimationFrame(step);
+    };
+    window.requestAnimationFrame(step);
+  };
+
+  animateValue('stat-cars', 0, cars.length, 1200);
+  animateValue('stat-active', 0, active, 1200);
+  animateValue('stat-pending', 0, pending, 1200);
+  animateValue('stat-rentals', 0, rentals.length, 1200);
+  animateValue('stat-completed', 0, completed, 1200);
+  animateValue('stat-avail', 0, avail, 1200);
+  animateValue('stat-users', 0, users.length, 1200);
+
+  // Make pending card clickable to jump to Rentals
+  const pendCard = document.getElementById('stat-pending')?.closest('.stat-card');
+  if (pendCard) {
+    pendCard.style.cursor = 'pointer';
+    pendCard.onclick = () => {
+      navigate('rentals');
+      setTimeout(() => {
+        const filter = document.getElementById('rental-status-filter');
+        if (filter) { filter.value = 'pending'; filter.dispatchEvent(new Event('change')); }
+      }, 500);
+    };
+  }
 
   const pendBadge = document.getElementById('pending-badge');
-  if (pending > 0) { pendBadge.style.display=''; pendBadge.textContent = pending; }
+  if (pendBadge && pending > 0) { pendBadge.style.display=''; pendBadge.textContent = pending; }
 
   renderRecentRentals(rentals.slice(0,8), cars);
   renderCharts(rentals, cars);
@@ -169,7 +246,7 @@ async function loadDashboard() {
 
 function renderRecentRentals(list, cars) {
   const tbody = document.getElementById('recent-rentals-body');
-  if (!list.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:#94a3b8">Belum ada data reservasi</td></tr>'; return; }
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:#94a3b8">Belum ada data reservasi</td></tr>'; return; }
   tbody.innerHTML = list.map(r => {
     const car = r.car || cars.find(c => c.id === r.data_car_id) || {};
     const user = r.user || {};
@@ -180,7 +257,7 @@ function renderRecentRentals(list, cars) {
         <div style="font-weight:600;font-size:13px;">${userName}</div>
       </div></td>
       <td>${carDisplayName(car)}</td>
-      <td>${formatDate(r.start_date)}</td>
+      <td>${formatDate(r.start_date, false)}</td>
       <td style="font-weight:700;color:#f97316;">${formatRp(r.total_price)}</td>
       <td>${statusBadge(r.reservations_status || r.payment_status || 'pending')}</td>
     </tr>`;
@@ -229,3 +306,117 @@ window.openModal = openModal;
 window.closeModal = closeModal;
 window.renderPagination = renderPagination;
 window.extractList = extractList;
+
+function loadProfile() {
+  const u = JSON.parse(localStorage.getItem('smy_user') || '{}');
+  document.getElementById('profile-edit-name').value = u.name || '';
+  document.getElementById('profile-edit-phone').value = u.number_phone || u.phone || '';
+  document.getElementById('profile-edit-password').value = '';
+}
+
+async function handleProfileSave(e) {
+  e.preventDefault();
+  const name = document.getElementById('profile-edit-name').value.trim();
+  const phone = document.getElementById('profile-edit-phone').value.trim();
+  const password = document.getElementById('profile-edit-password').value;
+
+  if (!name) {
+    toast('Nama tidak boleh kosong!', 'error');
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('number_phone', phone);
+  fd.append('phone', phone);
+  if (password) {
+    if (password.length < 8) {
+      toast('Kata sandi baru minimal 8 karakter!', 'error');
+      return;
+    }
+    fd.append('password', password);
+    fd.append('password_confirmation', password);
+  }
+
+  const btn = document.getElementById('profile-save-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Menyimpan...';
+
+  const res = await Users.updateProfile(fd);
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-save"></i> Simpan Perubahan';
+
+  if (res && res.ok) {
+    toast('Profil berhasil diperbarui!');
+    await loadSidebarUser();
+  } else {
+    const errMsg = res?.data?.message || 'Gagal memperbarui profil.';
+    toast(errMsg, 'error');
+  }
+}
+
+window.loadProfile = loadProfile;
+window.handleProfileSave = handleProfileSave;
+
+// ===== REALTIME SILENT POLLING =====
+function playNotifySound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+  } catch(e) {}
+}
+
+let lastKnownRentalIds = new Set();
+let globalRentalsHash = '';
+let isFirstSync = true;
+
+async function globalRealtimeSync() {
+  if (!getToken()) return;
+  try {
+    let res = await Rentals.listAll();
+    if (!res || !res.ok) res = await Rentals.list();
+    const list = extractList(res);
+    if (!list.length) return;
+
+    const currentIds = new Set(list.map(r => String(r.id)));
+    if (isFirstSync) {
+      lastKnownRentalIds = currentIds;
+      isFirstSync = false;
+    } else {
+      let newCount = 0;
+      for (const r of list) {
+        if (!lastKnownRentalIds.has(String(r.id))) {
+          newCount++;
+          lastKnownRentalIds.add(String(r.id));
+          const cName = r.user?.name || r.name || 'Pelanggan';
+          toast(`Notifikasi: Reservasi Baru dari ${cName}! (#${r.id})`, 'info');
+          playNotifySound();
+        }
+      }
+    }
+
+    const newHash = JSON.stringify(list.map(r => ({id: r.id, s: r.status, rs: r.reservations_status, ps: r.payment_status})));
+    if (newHash !== globalRentalsHash) {
+      globalRentalsHash = newHash;
+      if (!isFirstSync) {
+        if (currentPage === 'dashboard') loadDashboard(true);
+        else if (currentPage === 'rentals') loadRentals(rentalsPage, true);
+      }
+    }
+  } catch(e) {}
+}
+
+if (window.globalPollTimer) clearInterval(window.globalPollTimer);
+window.globalPollTimer = setInterval(globalRealtimeSync, 10000);
+

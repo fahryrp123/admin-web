@@ -1,4 +1,4 @@
-/* ===== API MODULE ===== */
+  /* ===== API MODULE ===== */
 const API_BASE = 'https://sewamobilyuk-api.exponic.site/api';
 const IMG_BASE = 'https://sewamobilyuk-api.exponic.site/storage/';
 
@@ -36,48 +36,82 @@ const Auth = {
   login: (login, password) =>
     apiFetch('/login', { method: 'POST', body: JSON.stringify({ login, password }) }),
   logout: () => apiFetch('/logout', { method: 'POST' }),
-  profile: () => apiFetch('/show-profile'),
+  profile: () => apiFetch('/showProfile'),
 };
 
 /* ---- CARS  ----
    GET    /show             → list all cars
    GET    /show/{id}        → car detail
    POST   /add-car          → create (multipart)
-   POST   /edit-car/{id}    → update (multipart)
+   POST   /updateCar/{id}    → update (multipart)
    DELETE /deleteCar/{id}   → delete
 */
 const Cars = {
-  list: () => apiFetch('/show'),
+  list: (p = 1) => apiFetch('/show?page=' + p),
+  listAll: async () => {
+    let all = [], cp = 1;
+    while(true) {
+      const r = await apiFetch('/show?page=' + cp);
+      let list = [];
+      if (r.data?.data?.data && Array.isArray(r.data.data.data)) list = r.data.data.data;
+      else if (Array.isArray(r.data?.data)) list = r.data.data;
+      else if (Array.isArray(r.data)) list = r.data;
+      
+      if (!list.length) break;
+      all = all.concat(list);
+      
+      const d = r.data?.data;
+      if (d && d.last_page && cp >= d.last_page) break;
+      if (!d || !d.last_page) break;
+      cp++;
+    }
+    return { ok: true, data: all };
+  },
   get:  (id) => apiFetch('/show/' + id),
   create: (fd) => apiFetch('/add-car', { method: 'POST', body: fd, isForm: true }),
-  update: (id, fd) => apiFetch('/edit-car/' + id, { method: 'POST', body: fd, isForm: true }),
+  update: (id, fd) => apiFetch('/updateCar/' + id + '?_method=PUT', { method: 'POST', body: fd, isForm: true }),
   delete: (id) => apiFetch('/deleteCar/' + id, { method: 'DELETE' }),
 };
 
 /* ---- RESERVATIONS ----
    GET   /history-reservation        → list (customer own / admin all)
    GET   /all-reservation            → admin: all reservations (may exist)
-   PATCH /cancel-reservasi/{id}      → cancel
+   PATCH /cancel-reserv/{id}      → cancel
    PATCH /approve-refund/{id}        → approve refund
 */
 const Rentals = {
   list: () => apiFetch('/history-reservation'),
-  listAll: () => apiFetch('/all-reservation'),
-  cancel: (id) => apiFetch('/cancel-reservasi/' + id, { method: 'PATCH' }),
-  approveRefund: (id) => apiFetch('/approve-refund/' + id, { method: 'PATCH' }),
-  updateStatus: (id, status) =>
-    apiFetch('/reservation/' + id + '/status', { method: 'PATCH', body: JSON.stringify({ status }) }),
+  listAll: () => apiFetch('/reservations'),
+  cancel: (id) => apiFetch('/cancel-reserv/' + id, { method: 'PATCH' }),
+  approveRefund: (id) => apiFetch('/approve-refund/' + id, { method: 'PATCH', body: JSON.stringify({ id }) }),
+  approve: (id) => apiFetch('/approve-reservasi/' + id, { method: 'PATCH', body: JSON.stringify({ id }) }),
+  reject: (id, reason) => apiFetch('/rejected-reservation/' + id, { method: 'PATCH', body: JSON.stringify({ id, reason }) }),
+  cashConfirm: (id, amount) => apiFetch('/cashConfirm/' + id, { method: 'PATCH', body: JSON.stringify({ amount }) }),
+  startReserv: (id) => apiFetch('/startReserv/' + id, { method: 'PATCH' }),
+  endReserv: (id) => {
+    const now = new Date();
+    const tzOffset = now.getTimezoneOffset() * 60000; // offset in milliseconds
+    const localISOTime = (new Date(now - tzOffset)).toISOString().slice(0, 19).replace('T', ' ');
+    return apiFetch('/confirmResevDone/' + id, { 
+      method: 'PATCH', 
+      body: JSON.stringify({ returned_at: localISOTime }) 
+    });
+  },
+  detail: (id) => apiFetch('/reservation/' + id)
 };
 
 /* ---- USERS ----
-   GET    /show-profile              → current user profile
-   POST   /update-profile            → update own profile
+   GET    /showProfile              → current user profile
+   POST   /updateProfile            → update own profile
    DELETE /delete-account            → delete own account
    (no admin user list endpoint in docs – we'll use what's available)
 */
 const Users = {
-  profile: () => apiFetch('/show-profile'),
-  updateProfile: (fd) => apiFetch('/update-profile', { method: 'POST', body: fd, isForm: true }),
+  list: () => apiFetch('/customer-profile'),
+  get: (id) => apiFetch('/customer-profile'), // Admin API doesn't have a specific customer detail endpoint, falling back to list (or customer-profile handles it?)
+  delete: (id) => apiFetch('/deleteAccount'), // Fixed to match APIDog
+  profile: () => apiFetch('/showProfile'),
+  updateProfile: (fd) => apiFetch('/updateProfile', { method: 'POST', body: fd, isForm: true }),
 };
 
 /* ---- IMAGE URL ---- */
@@ -104,9 +138,24 @@ function formatRp(n) {
   if (n == null || n === '') return '-';
   return 'Rp ' + Number(n).toLocaleString('id-ID');
 }
-function formatDate(d) {
+function formatDate(d, useRelative = false) {
   if (!d) return '-';
-  return new Date(d).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+  const dateObj = new Date(d);
+  if (useRelative) {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const target = new Date(dateObj);
+    target.setHours(0,0,0,0);
+    const diffTime = target - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return '<span style="color:#eab308;font-weight:700;">Hari Ini</span>';
+    if (diffDays === 1) return '<span style="color:#3b82f6;font-weight:700;">Besok</span>';
+    if (diffDays === -1) return '<span style="color:#ef4444;font-weight:700;">Kemarin</span>';
+    if (diffDays > 1 && diffDays <= 7) return `<span style="font-weight:600;">${diffDays} Hari Lagi</span>`;
+    if (diffDays < -1) return `<span style="color:#ef4444;font-weight:700;">Telat ${Math.abs(diffDays)} Hari</span>`;
+  }
+  return dateObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
 }
 function formatDateTime(d) {
   if (!d) return '-';
@@ -114,23 +163,38 @@ function formatDateTime(d) {
 }
 function ucFirst(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : '-'; }
 
-function statusBadge(status) {
-  const map = {
-    pending:    ['badge-warning',   'fa-clock',            'Menunggu'],
-    confirmed:  ['badge-info',      'fa-check',            'Dikonfirmasi'],
-    active:     ['badge-success',   'fa-car',              'Aktif'],
-    completed:  ['badge-secondary', 'fa-flag-checkered',   'Selesai'],
-    cancelled:  ['badge-danger',    'fa-times',            'Dibatalkan'],
-    rejected:   ['badge-danger',    'fa-ban',              'Ditolak'],
-    available:  ['badge-success',   'fa-check-circle',     'Tersedia'],
-    rented:     ['badge-orange',    'fa-key',              'Disewa'],
-    maintenance:['badge-warning',   'fa-wrench',           'Servis'],
-    none:       ['badge-secondary', 'fa-minus-circle',     'Tidak Ada'],
-    approved:   ['badge-success',   'fa-check-double',     'Disetujui'],
-  };
-  const [cls, icon, label] = map[status] || ['badge-secondary','fa-circle', ucFirst(status)];
-  return `<span class="badge ${cls}"><i class="fas ${icon}"></i>${label}</span>`;
-}
+window.statusBadge = function(r) {
+  if(!r) return '-';
+  
+  if (typeof r === 'string') {
+    const l = r.toLowerCase();
+    if(l === 'pending_cash') return '<span class="badge-pill pill-warning">Menunggu Cash</span>';
+    if(l.includes('waiting') || l.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
+    if(l === 'approved') return '<span class="badge-pill pill-primary">Disetujui</span>';
+    if(l === 'active' || l === 'ongoing') return '<span class="badge-pill pill-success">Sedang Jalan</span>';
+    if(l === 'completed' || l === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
+    if(l === 'cancelled' || l === 'dibatalkan' || l === 'failed') return '<span class="badge-pill pill-danger">Dibatalkan</span>';
+    return `<span class="badge-pill pill-secondary">${r.toUpperCase()}</span>`;
+  }
+  
+  const st = (r.status || r.reservations_status || r.payment_status || 'pending').toLowerCase();
+  const pm = (r.payment_method || (r.payment && r.payment.payment_method) || '').toLowerCase();
+  
+  const isCash = (pm === 'cash' || pm === 'tunai' || st === 'pending_cash');
+  
+  if (isCash && (st.includes('pending') || st.includes('waiting') || st === 'pending_cash')) {
+    return '<span class="badge-pill pill-warning">Menunggu Cash</span>';
+  }
+  
+  if(st.includes('waiting') || st.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
+  if(st === 'approved' || st === 'confirmed' || st.includes('konfirmasi') || st.includes('disetujui') || st.includes('lunas') || st.includes('dibayar') || st === 'paid') return '<span class="badge-pill pill-primary">Dikonfirmasi</span>';
+  if(st === 'active' || st === 'ongoing' || st === 'on-going' || st === 'sedang disewa' || st.includes('jalan')) return '<span class="badge-pill pill-success">Sedang Jalan</span>';
+  if(st === 'completed' || st === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
+  if(st === 'cancelled' || st === 'dibatalkan' || st === 'failed') return '<span class="badge-pill pill-danger">Dibatalkan</span>';
+  
+  const rawStatus = r.status || r.reservations_status || r.payment_status || 'UNKNOWN';
+  return `<span class="badge-pill pill-secondary">${String(rawStatus).toUpperCase()}</span>`;
+};
 
 function avatarLetter(name) {
   if (!name) return '?';
@@ -140,7 +204,7 @@ function avatarLetter(name) {
 /* ---- CONFIRM ---- */
 function confirmAction(title, msg, onConfirm, danger = true) {
   const overlay = document.getElementById('confirm-overlay');
-  document.getElementById('confirm-icon').innerHTML  = danger ? '⚠️' : 'ℹ️';
+  document.getElementById('confirm-icon').innerHTML  = danger ? '<i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>' : '<i class="fas fa-info-circle" style="color: #3b82f6;"></i>';
   document.getElementById('confirm-title').textContent = title;
   document.getElementById('confirm-msg').textContent   = msg;
   const okBtn = document.getElementById('confirm-ok');
@@ -154,7 +218,19 @@ function confirmAction(title, msg, onConfirm, danger = true) {
 // Map API car object to display-friendly keys
 function carDisplayName(c) { return c.name_car || c.name || '-'; }
 function carPlate(c) { return c.plate_number || c.plat || '-'; }
-function carStatus(c) { return c.availability_status || c.status || 'available'; }
+function carStatus(c) {
+  if (c.availability_status === 'maintenance') return 'maintenance';
+  if (window.globalRentals && Array.isArray(window.globalRentals)) {
+    const isBooked = window.globalRentals.some(r => {
+      const cid = r.data_car_id || r.car_id || r.id_mobil || r.mobil_id || r.vehicle_id || r.id_kendaraan;
+      if (String(cid) !== String(c.id)) return false;
+      const st = (r.status || r.reservations_status || r.payment_status || '').toLowerCase();
+      return (st === 'confirmed' || st === 'approved' || st === 'active' || st === 'ongoing' || st === 'on-going' || st === 'sedang disewa' || st.includes('jalan'));
+    });
+    if (isBooked) return 'rented';
+  }
+  return c.availability_status || c.status || 'available';
+}
 function carPrice(c) { return c.price || c.price_per_day || 0; }
 function carYear(c) { return c.year_of_car || c.year || '-'; }
 function carPassengers(c) { return c.passenger_capacity || c.seat_capacity || '-'; }

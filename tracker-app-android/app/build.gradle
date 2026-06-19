@@ -1,0 +1,42 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.sewamobilyuk.tracker'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.sewamobilyuk.tracker"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    testOptions {
+        unitTests.all {
+            enabled = false
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    
+    // Play Services Location
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
+    
+    // OkHttp for API calls (versi pure Java agar tidak bentrok dengan Kotlin)
+    implementation 'com.squareup.okhttp3:okhttp:3.12.12'
+
+    // ZXing for QR Code Scanning
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+}

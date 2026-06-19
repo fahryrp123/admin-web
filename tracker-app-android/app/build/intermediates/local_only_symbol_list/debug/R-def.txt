@@ -1,0 +1,21 @@
+R_DEF: Internal format may change without notice
+local
+color colorAccent
+color colorPrimary
+color colorPrimaryDark
+drawable ic_launcher
+drawable logo
+id btnScanQR
+id btnToggle
+id etToken
+id tvStatus
+layout activity_main
+string app_name
+string enter_token
+string start_tracking
+string status_active
+string status_inactive
+string stop_tracking
+style Theme.SewaMobilYuk
+xml backup_rules
+xml data_extraction_rules
