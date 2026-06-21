@@ -451,8 +451,8 @@ window.viewRental = async function (id) {
   const paySt = st3;
 
   const isPending = stAll.includes('pending') || stAll.includes('waiting') || stAll.includes('menunggu') || (!st1 && !st2);
-  const isApproved = stAll.includes('approved') || stAll.includes('disetujui') || stAll.includes('konfirmasi') || stAll.includes('lunas') || stAll.includes('paid') || stAll.includes('dibayar');
-  const isOngoing = stAll.includes('active') || stAll.includes('ongoing') || stAll.includes('on-going') || stAll.includes('jalan');
+  const isApproved = stAll.includes('approved') || stAll.includes('confirmed') || stAll.includes('success') || stAll.includes('disetujui') || stAll.includes('konfirmasi') || stAll.includes('lunas') || stAll.includes('paid') || stAll.includes('dibayar');
+  const isOngoing = stAll.includes('active') || stAll.includes('ongoing') || stAll.includes('on-going') || stAll.includes('jalan') || stAll.includes('sedang disewa');
   const isCancelled = stAll.includes('cancelled') || stAll.includes('batal') || stAll.includes('dibatalkan');
 
   let actionHtml = '';
@@ -470,9 +470,6 @@ window.viewRental = async function (id) {
   }
 
   if (isApproved) {
-    if (paySt !== 'paid') {
-      actionHtml += `<button class="btn btn-primary" onclick="confirmCash(${r.id})"><i class="fas fa-money-bill-wave"></i> Konfirmasi Cash</button>`;
-    }
     actionHtml += `<button class="btn btn-success" onclick="startReserv(${r.id})"><i class="fas fa-key"></i> Mulai Sewa</button>`;
   }
 
