@@ -97,9 +97,34 @@ function renderCars() {
         : `<div class="car-img-placeholder"><i class="fas fa-car"></i></div>`;
         
       const st = carStatus(c);
-      const bg = st === 'available' ? '#dcfce7' : st === 'rented' ? '#dbeafe' : '#fefce8';
-      const color = st === 'available' ? '#166534' : st === 'rented' ? '#1e3a8a' : '#854d0e';
-      const border = st === 'available' ? '#bbf7d0' : st === 'rented' ? '#bfdbfe' : '#fef08a';
+      let bg = '#dcfce7', color = '#166534', border = '#bbf7d0', label = 'Tersedia';
+      if (st === 'rented') {
+        bg = '#ffedd5'; color = '#c2410c'; border = '#fed7aa'; label = 'Disewa';
+      } else if (st === 'maintenance') {
+        bg = '#fee2e2'; color = '#b91c1c'; border = '#fecaca'; label = 'Servis';
+      } else if (st === 'pending_cash') {
+        bg = '#fef9c3'; color = '#854d0e'; border = '#fef08a'; label = 'Menunggu Cash';
+      } else if (st === 'pending') {
+        bg = '#fef9c3'; color = '#854d0e'; border = '#fef08a'; label = 'Menunggu';
+      } else if (st === 'approved') {
+        bg = '#dbeafe'; color = '#1e40af'; border = '#bfdbfe'; label = 'Disetujui';
+      }
+
+      let statusHtml = '';
+      if (st === 'available' || st === 'maintenance') {
+        statusHtml = `
+          <select style="padding:6px 12px; font-size:11.5px; font-weight:700; height:auto; width:100px; border-radius:99px; cursor:pointer; background-color:${bg}; color:${color}; border:1px solid ${border}; outline:none; text-transform:uppercase; letter-spacing:0.5px; transition:all 0.2s;" onchange="updateCarStatus(${c.id}, this.value)">
+            <option value="available" ${st==='available'?'selected':''} style="background:white;color:black;">Tersedia</option>
+            <option value="maintenance" ${st==='maintenance'?'selected':''} style="background:white;color:black;">Servis</option>
+          </select>
+        `;
+      } else {
+        statusHtml = `
+          <span style="display:inline-block; padding:6px 12px; font-size:11.5px; font-weight:700; border-radius:99px; background-color:${bg}; color:${color}; border:1px solid ${border}; text-transform:uppercase; letter-spacing:0.5px; text-align:center; min-width:100px;">
+            ${label}
+          </span>
+        `;
+      }
       
       return `<tr>
         <td><div class="car-info">
@@ -113,13 +138,7 @@ function renderCars() {
         <td>${c.kategori||'-'}</td>
         <td style="font-weight:600;color:#f97316;">${formatRp(c.price)}</td>
         <td>${c.year_of_car||'-'}</td>
-        <td>
-          <select style="padding:6px 12px; font-size:11.5px; font-weight:700; height:auto; width:100px; border-radius:99px; cursor:pointer; background-color:${bg}; color:${color}; border:1px solid ${border}; outline:none; text-transform:uppercase; letter-spacing:0.5px; transition:all 0.2s;" onchange="updateCarStatus(${c.id}, this.value)">
-            <option value="available" ${st==='available'?'selected':''} style="background:white;color:black;">Tersedia</option>
-            <option value="rented" ${st==='rented'?'selected':''} style="background:white;color:black;">Disewa</option>
-            <option value="maintenance" ${st==='maintenance'?'selected':''} style="background:white;color:black;">Servis</option>
-          </select>
-        </td>
+        <td>${statusHtml}</td>
         <td>
           <div style="display:flex;gap:6px;">
             <button class="btn btn-secondary btn-icon btn-sm" title="Edit" onclick="openEditCar(${c.id})"><i class="fas fa-edit"></i></button>
@@ -148,20 +167,40 @@ function renderCars() {
         : `<div class="car-card-placeholder"><i class="fas fa-car"></i></div>`;
       
       const st = carStatus(c);
-      const stLabel = st === 'available' ? 'Tersedia' : st === 'rented' ? 'Disewa' : 'Servis';
-      const bg = st === 'available' ? '#dcfce7' : st === 'rented' ? '#dbeafe' : '#fefce8';
-      const color = st === 'available' ? '#166534' : st === 'rented' ? '#1e3a8a' : '#854d0e';
-      const border = st === 'available' ? '#bbf7d0' : st === 'rented' ? '#bfdbfe' : '#fef08a';
+      let bg = '#dcfce7', color = '#166534', border = '#bbf7d0', label = 'Tersedia';
+      if (st === 'rented') {
+        bg = '#ffedd5'; color = '#c2410c'; border = '#fed7aa'; label = 'Disewa';
+      } else if (st === 'maintenance') {
+        bg = '#fee2e2'; color = '#b91c1c'; border = '#fecaca'; label = 'Servis';
+      } else if (st === 'pending_cash') {
+        bg = '#fef9c3'; color = '#854d0e'; border = '#fef08a'; label = 'Menunggu Cash';
+      } else if (st === 'pending') {
+        bg = '#fef9c3'; color = '#854d0e'; border = '#fef08a'; label = 'Menunggu';
+      } else if (st === 'approved') {
+        bg = '#dbeafe'; color = '#1e40af'; border = '#bfdbfe'; label = 'Disetujui';
+      }
+
+      let gridStatusHtml = '';
+      if (st === 'available' || st === 'maintenance') {
+        gridStatusHtml = `
+          <select onclick="event.stopPropagation()" onchange="updateCarStatus(${c.id}, this.value)" style="position:absolute; top:12px; right:12px; padding:4px 10px; font-size:11px; font-weight:700; height:auto; width:auto; border-radius:20px; cursor:pointer; background-color:rgba(255,255,255,0.9); color:${color}; border:1px solid ${border}; outline:none; text-transform:uppercase; letter-spacing:0.5px; transition:all 0.2s; backdrop-filter:blur(4px);">
+            <option value="available" ${st==='available'?'selected':''} style="color:black;">Tersedia</option>
+            <option value="maintenance" ${st==='maintenance'?'selected':''} style="color:black;">Servis</option>
+          </select>
+        `;
+      } else {
+        gridStatusHtml = `
+          <span onclick="event.stopPropagation()" style="position:absolute; top:12px; right:12px; padding:4px 10px; font-size:11px; font-weight:700; border-radius:20px; background-color:${bg}; color:${color}; border:1px solid ${border}; text-transform:uppercase; letter-spacing:0.5px; backdrop-filter:blur(4px);">
+            ${label}
+          </span>
+        `;
+      }
       
       return `
         <div class="car-card">
           <div class="car-card-img-container" onclick="openCarDetail(${c.id})">
             ${imgEl}
-            <select onclick="event.stopPropagation()" onchange="updateCarStatus(${c.id}, this.value)" style="position:absolute; top:12px; right:12px; padding:4px 10px; font-size:11px; font-weight:700; height:auto; width:auto; border-radius:20px; cursor:pointer; background-color:rgba(255,255,255,0.9); color:${color}; border:1px solid ${border}; outline:none; text-transform:uppercase; letter-spacing:0.5px; transition:all 0.2s; backdrop-filter:blur(4px);">
-              <option value="available" ${st==='available'?'selected':''} style="color:black;">Tersedia</option>
-              <option value="rented" ${st==='rented'?'selected':''} style="color:black;">Disewa</option>
-              <option value="maintenance" ${st==='maintenance'?'selected':''} style="color:black;">Servis</option>
-            </select>
+            ${gridStatusHtml}
           </div>
           <div class="car-card-body">
             <h3 class="car-card-title" onclick="openCarDetail(${c.id})">${c.name_car || '-'}</h3>
@@ -209,8 +248,8 @@ window.openCarDetail = function(id) {
   if (!c) return;
   
   const st = carStatus(c);
-  const bg = st === 'available' ? '#dcfce7' : st === 'rented' ? '#dbeafe' : '#fefce8';
-  const color = st === 'available' ? '#166534' : st === 'rented' ? '#1e3a8a' : '#854d0e';
+  const bg = st === 'available' ? '#dcfce7' : st === 'rented' ? '#ffedd5' : '#fee2e2';
+  const color = st === 'available' ? '#166534' : st === 'rented' ? '#c2410c' : '#b91c1c';
   const stLabel = st === 'available' ? 'Tersedia' : st === 'rented' ? 'Sedang Disewa' : 'Sedang Servis';
 
   document.getElementById('detail-img').src = c.image_url || imgUrl(c.image);
@@ -262,6 +301,7 @@ function setupCarFilters() {
 document.getElementById('btn-add-car').onclick = () => {
   document.getElementById('car-id').value = '';
   document.getElementById('car-form').reset();
+  document.getElementById('car-status').disabled = false;
   document.getElementById('img-preview').style.display = 'none';
   document.getElementById('car-modal-title').textContent = 'Tambah Mobil Baru';
   openModal('car-modal-overlay');
@@ -284,7 +324,11 @@ window.openEditCar = async function(id) {
   document.getElementById('car-kategori').value    = c.kategori || '';
   document.getElementById('car-model').value       = c.model || '';
   document.getElementById('car-desc').value        = c.description || '';
-  document.getElementById('car-status').value      = c.availability_status || 'available';
+  
+  const st = carStatus(c);
+  const statusSelect = document.getElementById('car-status');
+  statusSelect.value = (st === 'available' || st === 'maintenance') ? st : 'rented';
+  statusSelect.disabled = (st !== 'available' && st !== 'maintenance');
 
   const img = imgUrl(c.image);
   const prev = document.getElementById('img-preview');
@@ -309,7 +353,36 @@ document.getElementById('car-image').addEventListener('change', function() {
 /* ===== SAVE CAR ===== */
 document.getElementById('car-save-btn').onclick = async () => {
   const id = document.getElementById('car-id').value;
+  const newStatus = document.getElementById('car-status').value;
+
   const fd = new FormData();
+
+  if (id) {
+    const c = allCars.find(x => x.id == id);
+    if (c) {
+      const currentSt = carStatus(c);
+      const isReserved = (currentSt !== 'available' && currentSt !== 'maintenance');
+      if (isReserved) {
+        fd.append('availability_status', c.availability_status || 'available');
+        fd.append('status', c.availability_status || 'available');
+      } else {
+        if (newStatus === 'rented') {
+          toast('Status "Disewa" hanya bisa aktif otomatis melalui transaksi reservasi.', 'warning');
+          return;
+        }
+        fd.append('availability_status', newStatus);
+        fd.append('status', newStatus);
+      }
+    }
+  } else {
+    if (newStatus === 'rented') {
+      toast('Status mobil baru tidak bisa langsung "Disewa".', 'warning');
+      return;
+    }
+    fd.append('availability_status', newStatus);
+    fd.append('status', newStatus);
+  }
+
   // Map form fields to API field names
   const fields = {
     name_car:          'car-name',
@@ -320,9 +393,7 @@ document.getElementById('car-save-btn').onclick = async () => {
     transmisi:         'car-transmission',
     kategori:          'car-kategori',
     model:             'car-model',
-    description:       'car-desc',
-    availability_status:'car-status',
-    status:            'car-status'
+    description:       'car-desc'
   };
   for (const [key, elId] of Object.entries(fields)) {
     const v = document.getElementById(elId)?.value;
@@ -367,6 +438,21 @@ window.deleteCar = function(id, name) {
 window.updateCarStatus = async function(id, newStatus) {
   const c = allCars.find(x => x.id === id);
   if (!c) return;
+
+  const currentSt = carStatus(c);
+
+  if (newStatus === 'rented' && currentSt !== 'rented') {
+    toast('Status "Disewa" hanya bisa aktif otomatis melalui transaksi reservasi.', 'warning');
+    renderCars();
+    return;
+  }
+
+  if (currentSt === 'rented' && newStatus !== 'rented') {
+    toast('Kendaraan sedang disewa. Selesaikan reservasi pada halaman Reservasi untuk mengubah status.', 'warning');
+    renderCars();
+    return;
+  }
+
   const fd = new FormData();
   fd.append('_method', 'PUT'); // Explicitly add method spoofing in body
   const fields = ['name_car', 'plate_number', 'year_of_car', 'price', 'passenger_capacity', 'transmisi', 'kategori', 'model', 'description'];
@@ -384,7 +470,7 @@ window.updateCarStatus = async function(id, newStatus) {
     toast('Status berhasil diperbarui!');
     loadCars(carsPage);
   } else {
-    const errMsg = res?.data?.message || (typeof res?.data === 'string' ? res.data.substring(0,50) : 'Server Error');
+    const errMsg = res?.data?.message || (typeof res?.data === 'string' ? res.data.substring(0,100) : 'Server Error');
     toast('Gagal: ' + errMsg, 'error');
     loadCars(carsPage);
   }

@@ -211,6 +211,10 @@
         Reservasi
         <span class="badge" id="pending-badge" style="display:none">0</span>
       </button>
+      <button class="nav-item" data-page="reports" id="nav-reports">
+        <span class="nav-icon"><i class="fas fa-file-invoice-dollar"></i></span>
+        Laporan Keuangan
+      </button>
 
       <div class="nav-section-label">Pengguna</div>
       <button class="nav-item" data-page="customers" id="nav-customers">
@@ -515,6 +519,13 @@
               <i class="fas fa-search"></i>
               <input type="text" id="rental-search" placeholder="Cari nama pelanggan / kode..."/>
             </div>
+            <div style="display:flex; align-items:center; gap:8px; margin-left:12px; flex-wrap:wrap;">
+              <span style="font-size:12px; font-weight:600; color:var(--text-muted)">Dari:</span>
+              <input type="date" id="rental-filter-start" class="form-control" style="width:auto; padding:6px 12px; height:auto;"/>
+              <span style="font-size:12px; font-weight:600; color:var(--text-muted)">Sampai:</span>
+              <input type="date" id="rental-filter-end" class="form-control" style="width:auto; padding:6px 12px; height:auto;"/>
+              <button class="btn btn-secondary btn-sm" id="btn-clear-rental-dates" title="Reset Tanggal" style="padding: 6px 10px;"><i class="fas fa-undo"></i> Reset</button>
+            </div>
           </div>
           <div class="table-wrapper" style="position:relative">
             <div id="rentals-loading" class="loading-overlay" style="display:none"><div class="spinner"></div></div>
@@ -652,6 +663,108 @@
           <div class="pagination" id="customers-pagination"></div>
         </div>
       </div><!-- /customers -->
+
+      <!-- ===== REPORTS PAGE ===== -->
+      <div class="page" id="page-reports">
+        <div class="page-header">
+          <div class="page-header-left">
+            <h1>Laporan Keuangan</h1>
+            <p>Analisis pendapatan, transaksi, dan performa armada</p>
+          </div>
+          <div class="page-header-actions">
+            <button class="btn btn-primary" onclick="window.printReport()">
+              <i class="fas fa-print"></i> Cetak Laporan
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Card -->
+        <div class="card" style="margin-bottom: 24px;">
+          <div class="toolbar" style="padding: 14px 20px;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-size:12px; font-weight:600; color:var(--text-muted)"><i class="fas fa-filter"></i> Filter Tanggal Sewa:</span>
+              <span style="font-size:12px; font-weight:600; color:var(--text-muted); margin-left:8px;">Dari</span>
+              <input type="date" id="report-filter-start" class="form-control" style="width:auto; padding:6px 12px; height:auto;"/>
+              <span style="font-size:12px; font-weight:600; color:var(--text-muted)">Sampai</span>
+              <input type="date" id="report-filter-end" class="form-control" style="width:auto; padding:6px 12px; height:auto;"/>
+              <button class="btn btn-secondary btn-sm" id="btn-clear-report-dates" title="Reset Tanggal" style="padding: 6px 10px;"><i class="fas fa-undo"></i> Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid" style="margin-bottom: 24px;">
+          <div class="stat-card">
+            <div class="stat-icon green"><i class="fas fa-wallet"></i></div>
+            <div>
+              <div class="stat-value" id="rep-stat-total-income">Rp 0</div>
+              <div class="stat-label">Total Pendapatan</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class="fas fa-calendar-check"></i></div>
+            <div>
+              <div class="stat-value" id="rep-stat-total-transactions">0</div>
+              <div class="stat-label">Total Transaksi</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon orange"><i class="fas fa-key"></i></div>
+            <div>
+              <div class="stat-value" id="rep-stat-active-rentals">0</div>
+              <div class="stat-label">Penyewaan Aktif</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon red"><i class="fas fa-times-circle"></i></div>
+            <div>
+              <div class="stat-value" id="rep-stat-cancelled-rentals">0</div>
+              <div class="stat-label">Transaksi Batal</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <!-- Monthly Chart -->
+          <div class="card col-full">
+            <div class="card-header">
+              <div class="card-title">Grafik Pendapatan Reservasi</div>
+              <div class="card-subtitle">Visualisasi tren pendapatan bulanan dari transaksi reservasi</div>
+            </div>
+            <div class="card-body">
+              <div class="chart-container" style="height: 300px; position: relative;">
+                <canvas id="chart-reports-income"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Per-Car Income Report -->
+          <div class="card col-full">
+            <div class="card-header">
+              <div class="card-title">Performa & Pendapatan per Armada</div>
+              <div class="card-subtitle">Detail total pendapatan yang dihasilkan oleh setiap unit mobil</div>
+            </div>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Mobil</th>
+                    <th>Plat Nomor</th>
+                    <th>Kategori</th>
+                    <th>Harga/Hari</th>
+                    <th>Jumlah Transaksi</th>
+                    <th>Total Hari Sewa</th>
+                    <th>Total Pendapatan</th>
+                  </tr>
+                </thead>
+                <tbody id="rep-cars-tbody">
+                  <tr><td colspan="7" style="text-align:center;padding:24px;color:#94a3b8">Memuat data...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div><!-- /reports -->
 
       <!-- ===== PROFILE PAGE ===== -->
       <div class="page" id="page-profile">
@@ -991,5 +1104,6 @@
 <script src="{{ asset('js/rentals.js') }}?v=super_force_reload_124"></script>
 <script src="{{ asset('js/customers.js') }}?v={{ time() }}"></script>
 <script src="{{ asset('js/tracking.js') }}?v={{ time() }}"></script>
+<script src="{{ asset('js/reports.js') }}?v={{ time() }}"></script>
 </body>
 </html>

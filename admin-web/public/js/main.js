@@ -9,7 +9,7 @@
         isAdmin = true;
       }
     }
-  } catch(e) {}
+  } catch (e) { }
 
   if (!token || !isAdmin) {
     localStorage.removeItem('smy_token');
@@ -35,14 +35,14 @@ document.addEventListener('DOMContentLoaded', () => {
   navigate('dashboard');
   document.getElementById('btn-logout').onclick = doLogout;
   document.getElementById('btn-logout-profile').onclick = doLogout;
-  
+
   const profileForm = document.getElementById('profile-edit-form');
   if (profileForm) profileForm.onsubmit = handleProfileSave;
 });
 
 function setTopbarDate() {
   document.getElementById('topbar-date').textContent =
-    new Date().toLocaleDateString('id-ID', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
+    new Date().toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 }
 
 function loadSidebarUser() {
@@ -72,11 +72,11 @@ function loadSidebarUser() {
     document.getElementById('pi-name').textContent = n;
     document.getElementById('pi-email').textContent = d.email || '-';
     document.getElementById('pi-phone').textContent = d.number_phone || d.phone || '-';
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 async function doLogout() {
-  await Auth.logout().catch(() => {});
+  await Auth.logout().catch(() => { });
   localStorage.removeItem('smy_token');
   localStorage.removeItem('smy_user');
   document.cookie = "smy_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
@@ -96,13 +96,22 @@ function navigate(page) {
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   document.getElementById('nav-' + page)?.classList.add('active');
   const titles = {
-    dashboard:'Dashboard', cars:'Kelola Mobil',
-    rentals:'Reservasi', tracking:'Tracking Kendaraan',
-    customers:'Pelanggan', profile:'Profil Admin'
+    dashboard: 'Dashboard', cars: 'Kelola Mobil',
+    rentals: 'Reservasi', tracking: 'Tracking Kendaraan',
+    customers: 'Pelanggan', profile: 'Profil Admin',
+    reports: 'Laporan Keuangan'
   };
   document.getElementById('topbar-title').textContent = titles[page] || page;
   closeSidebar();
-  const loaders = { dashboard: loadDashboard, cars: loadCars, rentals: loadRentals, tracking: loadTracking, customers: loadCustomers, profile: loadProfile };
+  const loaders = { 
+    dashboard: loadDashboard, 
+    cars: loadCars, 
+    rentals: loadRentals, 
+    tracking: loadTracking, 
+    customers: loadCustomers, 
+    profile: loadProfile,
+    reports: typeof loadReports === 'function' ? loadReports : () => console.log('loadReports not loaded')
+  };
   if (loaders[page]) loaders[page]();
 }
 
@@ -122,12 +131,12 @@ function closeSidebar() {
 }
 
 /* ===== MODAL ===== */
-function openModal(id) { 
-  document.getElementById(id).classList.add('open'); 
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
   document.body.style.overflow = 'hidden';
 }
-function closeModal(id) { 
-  document.getElementById(id).classList.remove('open'); 
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
   document.body.style.overflow = '';
 }
 function openImageModal(url) {
@@ -142,16 +151,16 @@ window.openImageModal = openImageModal;
 function renderPagination(containerId, total, current, perPage, onChangeFn) {
   const pages = Math.ceil(total / perPage);
   const el = document.getElementById(containerId);
-  if (!el || pages <= 1) { if(el) el.innerHTML = ''; return; }
+  if (!el || pages <= 1) { if (el) el.innerHTML = ''; return; }
   let html = `<span class="pagination-info">Total ${total} data</span>`;
-  html += `<button class="page-btn" ${current===1?'disabled':''} onclick="${onChangeFn}(${current-1})"><i class="fas fa-chevron-left"></i></button>`;
+  html += `<button class="page-btn" ${current === 1 ? 'disabled' : ''} onclick="${onChangeFn}(${current - 1})"><i class="fas fa-chevron-left"></i></button>`;
   for (let i = 1; i <= pages; i++) {
-    if (i === 1 || i === pages || Math.abs(i-current) <= 1)
-      html += `<button class="page-btn ${i===current?'active':''}" onclick="${onChangeFn}(${i})">${i}</button>`;
-    else if (Math.abs(i-current) === 2)
+    if (i === 1 || i === pages || Math.abs(i - current) <= 1)
+      html += `<button class="page-btn ${i === current ? 'active' : ''}" onclick="${onChangeFn}(${i})">${i}</button>`;
+    else if (Math.abs(i - current) === 2)
       html += `<span style="padding:0 4px;color:#94a3b8">…</span>`;
   }
-  html += `<button class="page-btn" ${current===pages?'disabled':''} onclick="${onChangeFn}(${current+1})"><i class="fas fa-chevron-right"></i></button>`;
+  html += `<button class="page-btn" ${current === pages ? 'disabled' : ''} onclick="${onChangeFn}(${current + 1})"><i class="fas fa-chevron-right"></i></button>`;
   el.innerHTML = html;
 }
 
@@ -184,17 +193,17 @@ async function loadDashboard(silent = false) {
   }
   const usersRes = await Users.list('per_page=1'); // Just to get the total length if possible, or all list
 
-  const cars    = extractList(carsRes);
+  const cars = extractList(carsRes);
   const rentals = extractList(rentalsRes);
-  const users   = extractList(usersRes);
+  const users = extractList(usersRes);
 
-  const newHash = JSON.stringify({ c: cars.length, r: rentals.length, rs: rentals.map(x=>x.status||x.reservations_status), cs: cars.map(x=>x.availability_status) });
+  const newHash = JSON.stringify({ c: cars.length, r: rentals.length, rs: rentals.map(x => x.status || x.reservations_status), cs: cars.map(x => x.availability_status) });
   if (silent && newHash === dashboardLastHash) return;
   dashboardLastHash = newHash;
 
-  const active    = cars.filter(c => carStatus(c) === 'rented').length;
-  const avail     = cars.filter(c => carStatus(c) === 'available').length;
-  const pending   = rentals.filter(r => {
+  const active = cars.filter(c => carStatus(c) === 'rented').length;
+  const avail = cars.filter(c => carStatus(c) === 'available').length;
+  const pending = rentals.filter(r => {
     const s = r.reservations_status || r.payment_status || '';
     return s === 'pending' || s === 'Waiting_payment' || s === 'waiting_payment';
   }).length;
@@ -238,9 +247,9 @@ async function loadDashboard(silent = false) {
   }
 
   const pendBadge = document.getElementById('pending-badge');
-  if (pendBadge && pending > 0) { pendBadge.style.display=''; pendBadge.textContent = pending; }
+  if (pendBadge && pending > 0) { pendBadge.style.display = ''; pendBadge.textContent = pending; }
 
-  renderRecentRentals(rentals.slice(0,8), cars);
+  renderRecentRentals(rentals.slice(0, 8), cars);
   renderCharts(rentals, cars);
 }
 
@@ -268,8 +277,8 @@ function renderCharts(rentals, cars) {
   // Trend: count by day (last 7 days)
   const days = [], counts = [];
   for (let i = 6; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate()-i);
-    days.push(d.toLocaleDateString('id-ID',{weekday:'short'}));
+    const d = new Date(); d.setDate(d.getDate() - i);
+    days.push(d.toLocaleDateString('id-ID', { weekday: 'short' }));
     counts.push(rentals.filter(r => {
       const rd = new Date(r.created_at || r.start_date || '');
       return rd.toDateString() === d.toDateString();
@@ -278,30 +287,32 @@ function renderCharts(rentals, cars) {
   if (chartTrend) chartTrend.destroy();
   chartTrend = new Chart(document.getElementById('chart-trend'), {
     type: 'line',
-    data: { labels: days, datasets: [{
-      label: 'Reservasi', data: counts,
-      borderColor:'#f97316', backgroundColor:'rgba(249,115,22,0.1)',
-      tension: 0.4, fill: true, pointBackgroundColor:'#f97316', pointRadius: 5
-    }]},
-    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,ticks:{stepSize:1}}} }
+    data: {
+      labels: days, datasets: [{
+        label: 'Reservasi', data: counts,
+        borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)',
+        tension: 0.4, fill: true, pointBackgroundColor: '#f97316', pointRadius: 5
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
   });
 
   // Fleet donut
-  const avail = cars.filter(c=>carStatus(c)==='available').length;
-  const rented = cars.filter(c=>carStatus(c)==='rented').length;
-  const maint  = cars.filter(c=>carStatus(c)==='maintenance').length;
+  const avail = cars.filter(c => carStatus(c) === 'available').length;
+  const rented = cars.filter(c => carStatus(c) === 'rented').length;
+  const maint = cars.filter(c => carStatus(c) === 'maintenance').length;
   if (chartFleet) chartFleet.destroy();
   chartFleet = new Chart(document.getElementById('chart-fleet'), {
     type: 'doughnut',
     data: {
-      labels: ['Tersedia','Disewa','Servis'],
-      datasets:[{ data:[avail,rented,maint], backgroundColor:['#22c55e','#f97316','#eab308'], borderWidth:0 }]
+      labels: ['Tersedia', 'Disewa', 'Servis'],
+      datasets: [{ data: [avail, rented, maint], backgroundColor: ['#22c55e', '#f97316', '#eab308'], borderWidth: 0 }]
     },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}, cutout:'65%' }
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, cutout: '65%' }
   });
 }
 
-window.navigate  = navigate;
+window.navigate = navigate;
 window.openModal = openModal;
 window.closeModal = closeModal;
 window.renderPagination = renderPagination;
@@ -374,7 +385,7 @@ function playNotifySound() {
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.5);
-  } catch(e) {}
+  } catch (e) { }
 }
 
 let lastKnownRentalIds = new Set();
@@ -406,7 +417,7 @@ async function globalRealtimeSync() {
       }
     }
 
-    const newHash = JSON.stringify(list.map(r => ({id: r.id, s: r.status, rs: r.reservations_status, ps: r.payment_status})));
+    const newHash = JSON.stringify(list.map(r => ({ id: r.id, s: r.status, rs: r.reservations_status, ps: r.payment_status })));
     if (newHash !== globalRentalsHash) {
       globalRentalsHash = newHash;
       if (!isFirstSync) {
@@ -414,7 +425,7 @@ async function globalRealtimeSync() {
         else if (currentPage === 'rentals') loadRentals(rentalsPage, true);
       }
     }
-  } catch(e) {}
+  } catch (e) { }
 }
 
 if (window.globalPollTimer) clearInterval(window.globalPollTimer);

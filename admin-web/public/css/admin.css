@@ -1807,3 +1807,36 @@ textarea.form-control {
   gap: 20px;
   padding: 16px 0;
 }
+
+/* ===== REPORTS PRINT STYLING ===== */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+  .sidebar,
+  .topbar,
+  .page-header-actions,
+  #toast-container,
+  .modal-overlay,
+  .drawer-overlay,
+  .side-drawer,
+  .nav-item,
+  .view-toggle {
+    display: none !important;
+  }
+  .main-content {
+    margin-left: 0 !important;
+    padding: 0 !important;
+  }
+  .page-content {
+    padding: 0 !important;
+  }
+  .card {
+    border: none !important;
+    box-shadow: none !important;
+  }
+  canvas {
+    max-width: 100% !important;
+  }
+}

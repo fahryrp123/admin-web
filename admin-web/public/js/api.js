@@ -1,4 +1,4 @@
-  /* ===== API MODULE ===== */
+/* ===== API MODULE ===== */
 const API_BASE = 'https://sewamobilyuk-api.exponic.site/api';
 const IMG_BASE = 'https://sewamobilyuk-api.exponic.site/storage/';
 
@@ -24,9 +24,15 @@ async function apiFetch(path, options = {}) {
       return;
     }
     const text = await res.text();
-    try { return { ok: res.ok, status: res.status, data: JSON.parse(text) }; }
+    try {
+      const parsed = JSON.parse(text);
+      if (res.ok && parsed.status === 'error') {
+        return { ok: false, status: res.status, data: parsed };
+      }
+      return { ok: res.ok, status: res.status, data: parsed };
+    }
     catch { return { ok: res.ok, status: res.status, data: text }; }
-  } catch(e) {
+  } catch (e) {
     return { ok: false, status: 0, data: { message: 'Gagal terhubung ke server.' } };
   }
 }
@@ -50,16 +56,16 @@ const Cars = {
   list: (p = 1) => apiFetch('/show?page=' + p),
   listAll: async () => {
     let all = [], cp = 1;
-    while(true) {
+    while (true) {
       const r = await apiFetch('/show?page=' + cp);
       let list = [];
       if (r.data?.data?.data && Array.isArray(r.data.data.data)) list = r.data.data.data;
       else if (Array.isArray(r.data?.data)) list = r.data.data;
       else if (Array.isArray(r.data)) list = r.data;
-      
+
       if (!list.length) break;
       all = all.concat(list);
-      
+
       const d = r.data?.data;
       if (d && d.last_page && cp >= d.last_page) break;
       if (!d || !d.last_page) break;
@@ -67,7 +73,7 @@ const Cars = {
     }
     return { ok: true, data: all };
   },
-  get:  (id) => apiFetch('/show/' + id),
+  get: (id) => apiFetch('/show/' + id),
   create: (fd) => apiFetch('/add-car', { method: 'POST', body: fd, isForm: true }),
   update: (id, fd) => apiFetch('/updateCar/' + id + '?_method=PUT', { method: 'POST', body: fd, isForm: true }),
   delete: (id) => apiFetch('/deleteCar/' + id, { method: 'DELETE' }),
@@ -92,9 +98,9 @@ const Rentals = {
     const now = new Date();
     const tzOffset = now.getTimezoneOffset() * 60000; // offset in milliseconds
     const localISOTime = (new Date(now - tzOffset)).toISOString().slice(0, 19).replace('T', ' ');
-    return apiFetch('/confirmResevDone/' + id, { 
-      method: 'PATCH', 
-      body: JSON.stringify({ returned_at: localISOTime }) 
+    return apiFetch('/confirmResevDone/' + id, {
+      method: 'PATCH',
+      body: JSON.stringify({ returned_at: localISOTime })
     });
   },
   detail: (id) => apiFetch('/reservation/' + id)
@@ -109,7 +115,7 @@ const Rentals = {
 const Users = {
   list: () => apiFetch('/customer-profile'),
   get: (id) => apiFetch('/customer-profile'), // Admin API doesn't have a specific customer detail endpoint, falling back to list (or customer-profile handles it?)
-  delete: (id) => apiFetch('/deleteAccount'), // Fixed to match APIDog
+  delete: (id) => apiFetch('/deleteAccount', { method: 'DELETE', body: JSON.stringify({ id }) }), // Mengirim ID di dalam body
   profile: () => apiFetch('/showProfile'),
   updateProfile: (fd) => apiFetch('/updateProfile', { method: 'POST', body: fd, isForm: true }),
 };
@@ -125,10 +131,10 @@ function imgUrl(path) {
 function toast(msg, type = 'success') {
   const container = document.getElementById('toast-container');
   if (!container) return;
-  const icons = { success:'fa-check-circle', error:'fa-times-circle', info:'fa-info-circle', warning:'fa-exclamation-triangle' };
+  const icons = { success: 'fa-check-circle', error: 'fa-times-circle', info: 'fa-info-circle', warning: 'fa-exclamation-triangle' };
   const el = document.createElement('div');
   el.className = `toast toast-${type}`;
-  el.innerHTML = `<i class="fas ${icons[type]||icons.info} toast-icon"></i><span class="toast-msg">${msg}</span>`;
+  el.innerHTML = `<i class="fas ${icons[type] || icons.info} toast-icon"></i><span class="toast-msg">${msg}</span>`;
   container.appendChild(el);
   setTimeout(() => { el.classList.add('hide'); setTimeout(() => el.remove(), 300); }, 3200);
 }
@@ -143,70 +149,70 @@ function formatDate(d, useRelative = false) {
   const dateObj = new Date(d);
   if (useRelative) {
     const today = new Date();
-    today.setHours(0,0,0,0);
+    today.setHours(0, 0, 0, 0);
     const target = new Date(dateObj);
-    target.setHours(0,0,0,0);
+    target.setHours(0, 0, 0, 0);
     const diffTime = target - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) return '<span style="color:#eab308;font-weight:700;">Hari Ini</span>';
     if (diffDays === 1) return '<span style="color:#3b82f6;font-weight:700;">Besok</span>';
     if (diffDays === -1) return '<span style="color:#ef4444;font-weight:700;">Kemarin</span>';
     if (diffDays > 1 && diffDays <= 7) return `<span style="font-weight:600;">${diffDays} Hari Lagi</span>`;
     if (diffDays < -1) return `<span style="color:#ef4444;font-weight:700;">Telat ${Math.abs(diffDays)} Hari</span>`;
   }
-  return dateObj.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+  return dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 function formatDateTime(d) {
   if (!d) return '-';
-  return new Date(d).toLocaleString('id-ID', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  return new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 function ucFirst(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : '-'; }
 
-window.statusBadge = function(r) {
-  if(!r) return '-';
-  
+window.statusBadge = function (r) {
+  if (!r) return '-';
+
   if (typeof r === 'string') {
     const l = r.toLowerCase();
-    if(l === 'pending_cash') return '<span class="badge-pill pill-warning">Menunggu Cash</span>';
-    if(l.includes('waiting') || l.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
-    if(l === 'approved') return '<span class="badge-pill pill-primary">Disetujui</span>';
-    if(l === 'active' || l === 'ongoing') return '<span class="badge-pill pill-success">Sedang Jalan</span>';
-    if(l === 'completed' || l === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
-    if(l === 'cancelled' || l === 'dibatalkan' || l === 'failed') return '<span class="badge-pill pill-danger">Dibatalkan</span>';
+    if (l === 'pending_cash') return '<span class="badge-pill pill-warning">Menunggu Cash</span>';
+    if (l.includes('waiting') || l.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
+    if (l === 'approved') return '<span class="badge-pill pill-primary">Disetujui</span>';
+    if (l === 'active' || l === 'ongoing') return '<span class="badge-pill pill-success">Sedang Jalan</span>';
+    if (l === 'completed' || l === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
+    if (l === 'cancelled' || l === 'dibatalkan' || l === 'failed') return '<span class="badge-pill pill-danger">Dibatalkan</span>';
     return `<span class="badge-pill pill-secondary">${r.toUpperCase()}</span>`;
   }
-  
+
   const st = (r.status || r.reservations_status || r.payment_status || 'pending').toLowerCase();
   const pm = (r.payment_method || (r.payment && r.payment.payment_method) || '').toLowerCase();
-  
+
   const isCash = (pm === 'cash' || pm === 'tunai' || st === 'pending_cash');
-  
+
   if (isCash && (st.includes('pending') || st.includes('waiting') || st === 'pending_cash')) {
     return '<span class="badge-pill pill-warning">Menunggu Cash</span>';
   }
-  
-  if(st.includes('waiting') || st.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
-  if(st === 'approved' || st === 'confirmed' || st.includes('konfirmasi') || st.includes('disetujui') || st.includes('lunas') || st.includes('dibayar') || st === 'paid') return '<span class="badge-pill pill-primary">Dikonfirmasi</span>';
-  if(st === 'active' || st === 'ongoing' || st === 'on-going' || st === 'sedang disewa' || st.includes('jalan')) return '<span class="badge-pill pill-success">Sedang Jalan</span>';
-  if(st === 'completed' || st === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
-  if(st === 'cancelled' || st === 'dibatalkan' || st === 'failed') return '<span class="badge-pill pill-danger">Dibatalkan</span>';
-  
+
+  if (st.includes('waiting') || st.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
+  if (st === 'approved' || st === 'confirmed' || st.includes('konfirmasi') || st.includes('disetujui') || st.includes('lunas') || st.includes('dibayar') || st === 'paid') return '<span class="badge-pill pill-primary">Dikonfirmasi</span>';
+  if (st === 'active' || st === 'ongoing' || st === 'on-going' || st === 'sedang disewa' || st.includes('jalan')) return '<span class="badge-pill pill-success">Sedang Jalan</span>';
+  if (st === 'completed' || st === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
+  if (st === 'cancelled' || st === 'dibatalkan' || st === 'failed') return '<span class="badge-pill pill-danger">Dibatalkan</span>';
+
   const rawStatus = r.status || r.reservations_status || r.payment_status || 'UNKNOWN';
   return `<span class="badge-pill pill-secondary">${String(rawStatus).toUpperCase()}</span>`;
 };
 
 function avatarLetter(name) {
   if (!name) return '?';
-  return name.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+  return name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
 }
 
 /* ---- CONFIRM ---- */
 function confirmAction(title, msg, onConfirm, danger = true) {
   const overlay = document.getElementById('confirm-overlay');
-  document.getElementById('confirm-icon').innerHTML  = danger ? '<i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>' : '<i class="fas fa-info-circle" style="color: #3b82f6;"></i>';
+  document.getElementById('confirm-icon').innerHTML = danger ? '<i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>' : '<i class="fas fa-info-circle" style="color: #3b82f6;"></i>';
   document.getElementById('confirm-title').textContent = title;
-  document.getElementById('confirm-msg').textContent   = msg;
+  document.getElementById('confirm-msg').textContent = msg;
   const okBtn = document.getElementById('confirm-ok');
   okBtn.className = 'btn ' + (danger ? 'btn-danger' : 'btn-primary');
   okBtn.textContent = 'Ya, Lanjutkan';
@@ -219,17 +225,43 @@ function confirmAction(title, msg, onConfirm, danger = true) {
 function carDisplayName(c) { return c.name_car || c.name || '-'; }
 function carPlate(c) { return c.plate_number || c.plat || '-'; }
 function carStatus(c) {
-  if (c.availability_status === 'maintenance') return 'maintenance';
+  if (c.availability_status === 'maintenance' || c.status === 'maintenance') return 'maintenance';
   if (window.globalRentals && Array.isArray(window.globalRentals)) {
-    const isBooked = window.globalRentals.some(r => {
+    const activeRental = window.globalRentals.find(r => {
       const cid = r.data_car_id || r.car_id || r.id_mobil || r.mobil_id || r.vehicle_id || r.id_kendaraan;
       if (String(cid) !== String(c.id)) return false;
       const st = (r.status || r.reservations_status || r.payment_status || '').toLowerCase();
-      return (st === 'confirmed' || st === 'approved' || st === 'active' || st === 'ongoing' || st === 'on-going' || st === 'sedang disewa' || st.includes('jalan'));
+      return st !== 'cancelled' && 
+             st !== 'dibatalkan' && 
+             st !== 'failed' && 
+             st !== 'completed' && 
+             st !== 'selesai' && 
+             st !== 'rejected' && 
+             st !== 'ditolak' && 
+             !st.includes('reject') && 
+             !st.includes('batal') && 
+             !st.includes('cancel') && 
+             !st.includes('fail') && 
+             !st.includes('done') && 
+             !st.includes('complete');
     });
-    if (isBooked) return 'rented';
+    
+    if (activeRental) {
+      const st = (activeRental.status || activeRental.reservations_status || activeRental.payment_status || 'pending').toLowerCase();
+      if (st.includes('pending_cash')) return 'pending_cash';
+      if (st.includes('waiting') || st.includes('pending')) return 'pending';
+      if (st === 'approved' || st === 'confirmed' || st.includes('konfirmasi') || st.includes('disetujui')) return 'approved';
+      return 'rented';
+    }
   }
-  return c.availability_status || c.status || 'available';
+  
+  const rawStatus = (c.availability_status || c.status || 'available').toLowerCase();
+  if (rawStatus.includes('pending_cash')) return 'pending_cash';
+  if (rawStatus.includes('waiting') || rawStatus.includes('pending')) return 'pending';
+  if (rawStatus === 'approved' || rawStatus === 'confirmed' || rawStatus.includes('konfirmasi') || rawStatus.includes('disetujui')) return 'approved';
+  if (rawStatus === 'maintenance') return 'maintenance';
+  if (rawStatus === 'rented') return 'rented';
+  return 'available';
 }
 function carPrice(c) { return c.price || c.price_per_day || 0; }
 function carYear(c) { return c.year_of_car || c.year || '-'; }

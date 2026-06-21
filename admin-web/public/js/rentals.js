@@ -18,6 +18,7 @@ async function loadRentals(page = 1, silent = false) {
 
   let newRentals = extractList(res);
   const cars = extractList(carsRes);
+  allCars = cars;
 
   // Map cars to rentals
   newRentals = newRentals.map(r => {
@@ -32,7 +33,7 @@ async function loadRentals(page = 1, silent = false) {
   if (silent && newHash === rentalsLastHash) {
     return; // Tidak ada perubahan, lewati render
   }
-  
+
   rentalsLastHash = newHash;
   allRentals = newRentals;
   window.globalRentals = newRentals;
@@ -74,11 +75,25 @@ function updateRentalStats() {
 
 function getFilteredRentals() {
   const q = (document.getElementById('rental-search').value || '').toLowerCase();
+  const startFilter = document.getElementById('rental-filter-start')?.value || '';
+  const endFilter = document.getElementById('rental-filter-end')?.value || '';
+
   return allRentals.filter(r => {
     const name = (r.user?.name || r.name || '').toLowerCase();
     const car = (r.car?.name || r.car?.brand || '').toLowerCase();
     const code = String(r.id || '').toLowerCase();
     const matchQ = !q || name.includes(q) || car.includes(q) || code.includes(q);
+
+    // Date filtering
+    let matchDate = true;
+    if (startFilter) {
+      const rStart = r.start_date ? r.start_date.split(' ')[0] : '';
+      if (rStart < startFilter) matchDate = false;
+    }
+    if (endFilter) {
+      const rStart = r.start_date ? r.start_date.split(' ')[0] : '';
+      if (rStart > endFilter) matchDate = false;
+    }
 
     // Status matching
     const rawStatus = (r.status || r.reservations_status || r.payment_status || 'pending').toLowerCase();
@@ -90,7 +105,7 @@ function getFilteredRentals() {
 
     const matchStatus = !rentalStatusFilter || normStatus === rentalStatusFilter.toLowerCase();
 
-    return matchQ && matchStatus;
+    return matchQ && matchDate && matchStatus;
   });
 }
 
@@ -111,7 +126,7 @@ function renderRentals() {
     const st2 = (r.reservations_status || '').toLowerCase();
     const st3 = (r.payment_status || '').toLowerCase();
     const stAll = st1 + ' ' + st2 + ' ' + st3;
-    
+
     const isPending = stAll.includes('pending') || stAll.includes('waiting') || stAll.includes('menunggu') || (!st1 && !st2);
     const isApproved = stAll.includes('approved') || stAll.includes('confirmed') || stAll.includes('disetujui') || stAll.includes('konfirmasi') || stAll.includes('lunas') || stAll.includes('paid') || stAll.includes('dibayar');
     const isOngoing = stAll.includes('active') || stAll.includes('ongoing') || stAll.includes('on-going') || stAll.includes('jalan');
@@ -132,11 +147,11 @@ function renderRentals() {
     const customerName = r.user?.name || r.customer_name || r.name || 'Tanpa Nama';
     const customerEmail = r.user?.email || r.customer_email || r.email || '-';
     const customerPhone = r.user?.phone || r.user?.phone_number || r.customer_phone || '-';
-    
+
     const carObj = r.car || r.mobil || r.vehicle;
 
     const pm = (r.payment_method || (r.payment && r.payment.payment_method) || (r.payments && r.payments.length ? r.payments[0].payment_method : '') || '').toLowerCase();
-    
+
     // Quick check if there is a proof of payment image
     const pData = r.payment || (r.payments && r.payments.length ? r.payments[0] : null);
     let hasProof = false;
@@ -153,7 +168,7 @@ function renderRentals() {
               }
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
       if (pData.proof_of_payment || pData.bukti_pembayaran || pData.payment_proof || pData.receipt || pData.image || pData.bukti_transfer || pData.file || pData.attachment || payloadProof) hasProof = true;
       if (!hasProof) {
@@ -176,7 +191,7 @@ function renderRentals() {
         }
       }
     }
-    
+
     let pmBadge = '';
     if (pm === 'transfer' || pm === 'qris' || (hasProof && pm === 'cash')) {
       const displayPm = (pm === 'transfer' || pm === 'qris') ? pm.toUpperCase() : 'TRANSFER (Struk)';
@@ -211,19 +226,6 @@ function renderRentals() {
     <td>
       <div style="display:flex;gap:6px;">
         <button class="btn btn-secondary btn-icon btn-sm" title="Detail" onclick="viewRental(${r.id})"><i class="fas fa-eye"></i></button>
-        ${(stAll.includes('pending_cash')) ? `
-          <button class="btn btn-primary btn-icon btn-sm" title="Konfirmasi Cash" onclick="confirmCash(${r.id})"><i class="fas fa-money-bill-wave"></i></button>
-          <button class="btn btn-danger btn-icon btn-sm" title="Batalkan" onclick="rejectRental(${r.id})"><i class="fas fa-times"></i></button>
-        ` : (isPending) ? `
-          <button class="btn btn-success btn-icon btn-sm" title="Setujui" onclick="approveRental(${r.id})"><i class="fas fa-check"></i></button>
-          <button class="btn btn-danger btn-icon btn-sm" title="Tolak" onclick="rejectRental(${r.id})"><i class="fas fa-times"></i></button>
-        ` : ''}
-        ${(isApproved) ? `
-          <button class="btn btn-success btn-icon btn-sm" title="Mulai Sewa" onclick="startReserv(${r.id})"><i class="fas fa-key"></i></button>
-        ` : ''}
-        ${(isOngoing) ? `
-          <button class="btn btn-info btn-icon btn-sm" title="Selesai Sewa" onclick="endReserv(${r.id})"><i class="fas fa-flag-checkered"></i></button>
-        ` : ''}
       </div>
     </td>
   </tr>`;
@@ -233,6 +235,23 @@ function renderRentals() {
 
 function setupRentalFilters() {
   document.getElementById('rental-search').oninput = () => { rentalsPage = 1; renderRentals(); };
+  
+  // Date filter change listeners
+  const startF = document.getElementById('rental-filter-start');
+  const endF = document.getElementById('rental-filter-end');
+  const clearBtn = document.getElementById('btn-clear-rental-dates');
+  
+  if (startF) startF.onchange = () => { rentalsPage = 1; renderRentals(); };
+  if (endF) endF.onchange = () => { rentalsPage = 1; renderRentals(); };
+  if (clearBtn) {
+    clearBtn.onclick = () => {
+      if (startF) startF.value = '';
+      if (endF) endF.value = '';
+      rentalsPage = 1;
+      renderRentals();
+    };
+  }
+
   document.querySelectorAll('.rental-tab').forEach(btn => {
     btn.onclick = () => {
       rentalStatusFilter = btn.dataset.status;
@@ -252,34 +271,34 @@ function carDisplayName(car) {
 }
 
 function statusBadge(r) {
-  if(!r) return '-';
-  
+  if (!r) return '-';
+
   if (typeof r === 'string') {
     const l = r.toLowerCase();
-    if(l === 'pending_cash') return '<span class="badge-pill pill-warning">Menunggu Cash</span>';
-    if(l.includes('waiting') || l.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
-    if(l === 'approved') return '<span class="badge-pill pill-primary">Disetujui</span>';
-    if(l === 'active' || l === 'ongoing') return '<span class="badge-pill pill-success">Sedang Jalan</span>';
-    if(l === 'completed' || l === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
-    if(l === 'cancelled' || l === 'dibatalkan' || l === 'failed') return '<span class="badge-pill pill-danger">Dibatalkan</span>';
+    if (l === 'pending_cash') return '<span class="badge-pill pill-warning">Menunggu Cash</span>';
+    if (l.includes('waiting') || l.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
+    if (l === 'approved') return '<span class="badge-pill pill-primary">Disetujui</span>';
+    if (l === 'active' || l === 'ongoing') return '<span class="badge-pill pill-success">Sedang Jalan</span>';
+    if (l === 'completed' || l === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
+    if (l === 'cancelled' || l === 'dibatalkan' || l === 'failed') return '<span class="badge-pill pill-danger">Dibatalkan</span>';
     return `<span class="badge-pill pill-secondary">${r.toUpperCase()}</span>`;
   }
-  
+
   const st = (r.status || r.reservations_status || r.payment_status || 'pending').toLowerCase();
   const pm = (r.payment_method || (r.payment && r.payment.payment_method) || '').toLowerCase();
-  
+
   const isCash = (pm === 'cash' || pm === 'tunai' || st === 'pending_cash');
-  
+
   if (isCash && (st.includes('pending') || st.includes('waiting') || st === 'pending_cash')) {
     return '<span class="badge-pill pill-warning">Menunggu Cash</span>';
   }
-  
-  if(st.includes('waiting') || st.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
-  if(st === 'approved' || st === 'confirmed' || st.includes('konfirmasi') || st.includes('disetujui')) return '<span class="badge-pill pill-primary">Dikonfirmasi</span>';
-  if(st === 'active' || st === 'ongoing' || st === 'on-going' || st === 'sedang disewa' || st.includes('jalan')) return '<span class="badge-pill pill-success">Sedang Jalan</span>';
-  if(st === 'completed' || st === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
-  if(st === 'cancelled' || st === 'dibatalkan' || st === 'failed') return '<span class="badge-pill pill-danger">Dibatalkan</span>';
-  
+
+  if (st.includes('waiting') || st.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
+  if (st === 'approved' || st === 'confirmed' || st.includes('konfirmasi') || st.includes('disetujui')) return '<span class="badge-pill pill-primary">Dikonfirmasi</span>';
+  if (st === 'active' || st === 'ongoing' || st === 'on-going' || st === 'sedang disewa' || st.includes('jalan')) return '<span class="badge-pill pill-success">Sedang Jalan</span>';
+  if (st === 'completed' || st === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
+  if (st === 'cancelled' || st === 'dibatalkan' || st === 'failed') return '<span class="badge-pill pill-danger">Dibatalkan</span>';
+
   const rawStatus = r.status || r.reservations_status || r.payment_status || 'UNKNOWN';
   return `<span class="badge-pill pill-secondary">${String(rawStatus).toUpperCase()}</span>`;
 }
@@ -291,13 +310,16 @@ window.viewRental = async function (id) {
   const img = imgUrl(car.image || car.photo || car.foto);
   const pm = (r.payment_method || (r.payment && r.payment.payment_method) || (r.payments && r.payments.length ? r.payments[0].payment_method : '') || '').toLowerCase();
 
-  const ktpUrl = imgUrl(r.ktp || r.foto_ktp || r.image_ktp || user.ktp || user.foto_ktp || user.image_ktp);
-  const simUrl = imgUrl(r.sim || r.foto_sim || r.image_sim || user.sim || user.foto_sim || user.image_sim);
+  const ktpUrl = imgUrl(user.id_card || r.ktp || r.foto_ktp || r.image_ktp || user.ktp || user.foto_ktp || user.image_ktp);
+  const simUrl = imgUrl(user.drive_licence || r.sim || r.foto_sim || r.image_sim || user.sim || user.foto_sim || user.image_sim);
+  
+  const userPhone = user.number_phone || user.phone || user.no_hp || r.no_hp || r.phone || '-';
+  const userAddress = user.address || user.alamat || r.address || r.alamat || '-';
 
   // Payment proofs
   let paymentHtml = '';
   let proofPath = null;
-  
+
   const pData = r.payment || (r.payments && r.payments.length ? r.payments[0] : null);
 
   if (pData) {
@@ -314,7 +336,7 @@ window.viewRental = async function (id) {
             }
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     proofPath = pData.proof_of_payment || pData.bukti_pembayaran || pData.payment_proof || pData.receipt || pData.image || pData.image_pembayaran || pData.bukti_transfer || pData.file || pData.attachment || payloadProof;
     if (!proofPath) {
@@ -363,19 +385,29 @@ window.viewRental = async function (id) {
       
       <div style="background:white; padding:16px; border-radius:12px; border:1px solid var(--border); margin-bottom:16px;">
         <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:12px;">Pelanggan</div>
-        <div style="display:flex;align-items:center;gap:12px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
           <div class="avatar" style="width:48px;height:48px;font-size:18px;">${avatarLetter(user.name || 'U')}</div>
           <div>
             <div style="font-weight:700; font-size:15px;">${user.name || '-'}</div>
             <div style="font-size:13px;color:#64748b;">${user.email || ''}</div>
-            <div style="font-size:13px;color:#64748b;">${user.phone || user.no_hp || '-'}</div>
           </div>
         </div>
         
+        <div style="border-top:1px solid #f1f5f9; padding-top:12px; margin-bottom:12px; display:grid; grid-template-columns:1fr; gap:8px;">
+          <div><span style="font-size:11px;color:#94a3b8;font-weight:600;display:block;">No. HP</span><span style="font-size:13px;font-weight:500;">${userPhone}</span></div>
+          <div><span style="font-size:11px;color:#94a3b8;font-weight:600;display:block;">Alamat</span><span style="font-size:13px;font-weight:500;">${userAddress}</span></div>
+        </div>
+        
         ${(ktpUrl || simUrl) ? `
-        <div class="proof-image-grid">
-          ${ktpUrl ? `<div class="proof-card"><img src="${ktpUrl}" onclick="openImageModal('${ktpUrl}')"><span>KTP</span></div>` : ''}
-          ${simUrl ? `<div class="proof-card"><img src="${simUrl}" onclick="openImageModal('${simUrl}')"><span>SIM</span></div>` : ''}
+        <div class="proof-image-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div class="proof-card">
+            ${ktpUrl ? `<img src="${ktpUrl}" onclick="openImageModal('${ktpUrl}')" style="width:100%;height:100px;object-fit:contain;background:#f8fafc;border-radius:4px;cursor:zoom-in;">` : `<div style="height:100px;background:#f1f5f9;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#cbd5e1;"><i class="fas fa-id-card fa-2x"></i></div>`}
+            <div style="font-size:11px;font-weight:600;color:#64748b;margin-top:8px;text-align:center;">FOTO KTP</div>
+          </div>
+          <div class="proof-card">
+            ${simUrl ? `<img src="${simUrl}" onclick="openImageModal('${simUrl}')" style="width:100%;height:100px;object-fit:contain;background:#f8fafc;border-radius:4px;cursor:zoom-in;">` : `<div style="height:100px;background:#f1f5f9;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#cbd5e1;"><i class="fas fa-id-card fa-2x"></i></div>`}
+            <div style="font-size:11px;font-weight:600;color:#64748b;margin-top:8px;text-align:center;">FOTO SIM</div>
+          </div>
         </div>` : ''}
       </div>
 
@@ -487,7 +519,7 @@ window.approveRental = async function (id, fromModal = false) {
       // Cek apakah mobil ini sudah dipakai di reservasi lain pada tanggal yang tumpang tindih
       const overlap = allRentals.find(x => {
         if (String(x.id) === String(id)) return false; // Jangan cek diri sendiri
-        
+
         const xcid = x.data_car_id || x.car_id || x.id_mobil || x.mobil_id || x.vehicle_id || x.id_kendaraan;
         if (String(xcid) !== String(cid)) return false; // Beda mobil
 
@@ -497,7 +529,7 @@ window.approveRental = async function (id, fromModal = false) {
 
         const xstart = new Date(x.start_date).getTime();
         const xend = new Date(x.end_date).getTime();
-        
+
         // Logika tumpang tindih waktu
         return (start <= xend) && (end >= xstart);
       });
@@ -513,19 +545,24 @@ window.approveRental = async function (id, fromModal = false) {
     const res = await Rentals.approve(id);
     if (res?.ok) {
       toast('Reservasi disetujui!');
-      
+
       // Sinkronisasi status mobil ke database secara otomatis
       if (target) {
         const cid = target.data_car_id || target.car_id || target.id_mobil || target.mobil_id || target.vehicle_id || target.id_kendaraan;
         const car = allCars.find(c => String(c.id) === String(cid));
         if (car) {
-          const payload = {
-            name_car: car.name_car || '', plate_number: car.plate_number || '', year_of_car: car.year_of_car || '',
-            price: car.price || '', passenger_capacity: car.passenger_capacity || '', transmisi: car.transmisi || '',
-            kategori: car.kategori || '', model: car.model || '', description: car.description || '',
-            availability_status: 'rented', status: 'rented'
-          };
-          apiFetch('/updateCar/' + car.id, { method: 'PUT', body: JSON.stringify(payload) }).catch(e => console.error(e));
+          setTimeout(async () => {
+            const fd = new FormData();
+            fd.append('_method', 'PUT'); // Explicitly add method spoofing in body
+            const fields = ['name_car', 'plate_number', 'year_of_car', 'price', 'passenger_capacity', 'transmisi', 'kategori', 'model', 'description'];
+            fields.forEach(f => {
+              if (car[f]) fd.append(f, car[f]);
+            });
+            fd.append('availability_status', 'rented');
+            fd.append('status', 'rented');
+
+            await Cars.update(car.id, fd).catch(e => console.error('Gagal update status mobil:', e));
+          }, 500);
         }
       }
 
@@ -558,6 +595,28 @@ window.rejectRental = async function (id, fromModal = false) {
 
     if (res?.ok) {
       toast('Reservasi berhasil ditolak.', 'warning');
+
+      // Sinkronisasi status mobil ke database secara otomatis
+      const target = allRentals.find(x => String(x.id) === String(id));
+      if (target) {
+        const cid = target.data_car_id || target.car_id || target.id_mobil || target.mobil_id || target.vehicle_id || target.id_kendaraan;
+        const car = allCars.find(c => String(c.id) === String(cid));
+        if (car) {
+          setTimeout(async () => {
+            const fd = new FormData();
+            fd.append('_method', 'PUT');
+            const fields = ['name_car', 'plate_number', 'year_of_car', 'price', 'passenger_capacity', 'transmisi', 'kategori', 'model', 'description'];
+            fields.forEach(f => {
+              if (car[f]) fd.append(f, car[f]);
+            });
+            fd.append('availability_status', 'available');
+            fd.append('status', 'available');
+
+            await Cars.update(car.id, fd).catch(e => console.error('Gagal update status mobil:', e));
+          }, 500);
+        }
+      }
+
       closeModal('reject-modal-overlay');
       if (fromModal) {
         closeModal('rental-modal-overlay');
@@ -570,10 +629,10 @@ window.rejectRental = async function (id, fromModal = false) {
   };
 };
 
-window.confirmCash = async function(id) {
+window.confirmCash = async function (id) {
   const r = allRentals.find(x => String(x.id) === String(id));
   const tagihan = r ? (Number(r.total_price) || 0) : 0;
-  
+
   document.getElementById('cash-modal-tagihan').textContent = formatRp(tagihan);
   document.getElementById('cash-amount-input').value = '';
   openModal('cash-modal-overlay');
@@ -581,31 +640,60 @@ window.confirmCash = async function(id) {
   document.getElementById('btn-submit-cash').onclick = async () => {
     const amountStr = document.getElementById('cash-amount-input').value;
     const amount = parseInt(amountStr.replace(/\D/g, ''), 10);
-    
+
     if (isNaN(amount) || amount <= 0) {
       toast('Jumlah uang tidak valid.', 'error');
       return;
     }
-    
+
     if (amount < tagihan) {
       const lanjut = confirm(`Uang yang dimasukkan (${formatRp(amount)}) KURANG dari tagihan (${formatRp(tagihan)}). Tetap lanjutkan?`);
       if (!lanjut) return;
     }
-    
+
     const btn = document.getElementById('btn-submit-cash');
     btn.disabled = true;
     btn.textContent = 'Memproses...';
-    
+
     // Coba ambil payment_id, jika tidak ada fallback ke reservation_id
     const paymentId = (r && r.payment && r.payment.id) ? r.payment.id : id;
-    
+
     const res = await Rentals.cashConfirm(paymentId, amount);
-    
+
     btn.disabled = false;
     btn.textContent = 'Konfirmasi Uang';
-    
+
     if (res?.ok) {
       toast('Pembayaran cash berhasil dikonfirmasi!');
+      
+      // Auto-approve/confirm reservation immediately
+      if (r) {
+        const approveRes = await Rentals.approve(r.id);
+        if (approveRes?.ok) {
+          toast('Reservasi berhasil dikonfirmasi!');
+          
+          // Sinkronisasi status mobil ke database secara otomatis
+          const cid = r.data_car_id || r.car_id || r.id_mobil || r.mobil_id || r.vehicle_id || r.id_kendaraan;
+          const car = allCars.find(c => String(c.id) === String(cid));
+          if (car) {
+            setTimeout(async () => {
+              const fd = new FormData();
+              fd.append('_method', 'PUT'); // Explicitly add method spoofing in body
+              const fields = ['name_car', 'plate_number', 'year_of_car', 'price', 'passenger_capacity', 'transmisi', 'kategori', 'model', 'description'];
+              fields.forEach(f => {
+                if (car[f]) fd.append(f, car[f]);
+              });
+              fd.append('availability_status', 'rented');
+              fd.append('status', 'rented');
+
+              await Cars.update(car.id, fd).catch(e => console.error('Gagal update status mobil:', e));
+            }, 500);
+          }
+        } else {
+          toast(approveRes?.data?.message || 'Gagal menyetujui reservasi secara otomatis.', 'error');
+        }
+      }
+
       closeModal('cash-modal-overlay');
       closeRentalDetail();
       loadRentals(rentalsPage);
@@ -631,13 +719,13 @@ window.startReserv = async function (id) {
     const res = await Rentals.startReserv(id);
     if (res?.ok) {
       toast('Reservasi berhasil dimulai!');
-      
+
       // Sinkronisasi status mobil ke database secara otomatis
       const r = allRentals.find(x => String(x.id) === String(id));
       if (r) {
         const car = r.car || r.mobil || {};
         const cid = car.id || r.data_car_id || r.car_id || r.id_mobil || r.mobil_id || r.vehicle_id;
-        
+
         if (cid) {
           // Tunggu sebentar untuk memastikan backend selesai memproses startReserv
           // dan tidak terjadi race condition di database
@@ -650,7 +738,7 @@ window.startReserv = async function (id) {
             });
             fd.append('availability_status', 'rented');
             fd.append('status', 'rented');
-            
+
             await Cars.update(cid, fd).catch(e => console.error('Gagal update status mobil:', e));
           }, 500);
         }
@@ -709,7 +797,7 @@ window.endReserv = async function (id) {
       if (r) {
         const car = r.car || r.mobil || {};
         const cid = car.id || r.data_car_id || r.car_id || r.id_mobil || r.mobil_id || r.vehicle_id;
-        
+
         if (cid) {
           setTimeout(async () => {
             const fd = new FormData();
@@ -720,7 +808,7 @@ window.endReserv = async function (id) {
             });
             fd.append('availability_status', 'available');
             fd.append('status', 'available');
-            
+
             await Cars.update(cid, fd).catch(e => console.error('Gagal update status mobil:', e));
           }, 500);
         }
