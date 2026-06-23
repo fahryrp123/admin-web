@@ -1,6 +1,16 @@
 /* ===== RENTALS MODULE ===== */
 let allRentals = [];
 
+function extractList(resp) {
+  if (!resp) return [];
+  if (Array.isArray(resp)) return resp;
+  if (resp.data) {
+    if (Array.isArray(resp.data)) return resp.data;
+    if (resp.data.data && Array.isArray(resp.data.data)) return resp.data.data;
+  }
+  return [];
+}
+
 let rentalsLastHash = '';
 let rentalsPollTimer = null;
 
@@ -11,7 +21,7 @@ async function loadRentals(page = 1, silent = false) {
   // Fetch rentals and cars in parallel to map car details
   const [res, carsRes] = await Promise.all([
     Rentals.listAll().catch(() => Rentals.list()),
-    Cars.listAll() // Menggunakan listAll untuk mengambil semua mobil
+    Cars.listAll().catch(() => Cars.list()) // Menggunakan listAll untuk mengambil semua mobil
   ]);
 
   if (!silent) document.getElementById('rentals-loading').style.display = 'none';
@@ -67,9 +77,9 @@ function updateRentalStats() {
 
   if (document.getElementById('rentals-stat-today')) {
     document.getElementById('rentals-stat-today').textContent = totalToday;
-    document.getElementById('rentals-stat-pending').textContent = pending;
-    document.getElementById('rentals-stat-active').textContent = active;
-    document.getElementById('rentals-stat-income').textContent = formatRp(income);
+    if (document.getElementById('rentals-stat-pending')) document.getElementById('rentals-stat-pending').textContent = pending;
+    if (document.getElementById('rentals-stat-active')) document.getElementById('rentals-stat-active').textContent = active;
+    if (document.getElementById('rentals-stat-income')) document.getElementById('rentals-stat-income').textContent = formatRp(income);
   }
 }
 
@@ -200,11 +210,17 @@ function renderRentals() {
       pmBadge = '<div style="font-size:10px; font-weight:700; color:#10b981; margin-top:4px;"><i class="fas fa-money-bill-wave"></i> CASH</div>';
     }
 
-    return `<tr style="${bgStyle}">
+    let userAvatarHtml = avatarLetter(customerName);
+    if (r.user) {
+      const ppath = r.user.profile_picture || r.user.profile_photo_path || r.user.photo || r.user.avatar;
+      if (ppath) userAvatarHtml = `<img src="${imgUrl(ppath)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+    }
+
+    return `<tr style="${bgStyle}" onclick="viewRental(${r.id})" style="cursor:pointer;">
     <td><span style="color:#94a3b8;font-size:13px;">#${r.id || (start + i + 1)}</span></td>
     <td>
       <div style="display:flex; align-items:center; gap:10px;">
-        <div class="avatar bg-primary" style="color:white;">${avatarLetter(customerName)}</div>
+        <div class="avatar bg-primary" style="color:white; padding:0; overflow:hidden;">${userAvatarHtml}</div>
         <div>
           <div style="font-weight:600;color:var(--text-main);">${customerName}</div>
           <div style="font-size:12px;color:var(--text-sub);">${customerEmail}</div>
@@ -307,7 +323,7 @@ window.viewRental = async function (id) {
   const r = allRentals.find(x => String(x.id) === String(id)) || {};
   const car = r.car || r.mobil || r.vehicle || {};
   const user = r.user || {};
-  const img = imgUrl(car.image || car.photo || car.foto);
+  const img = car.image_url || imgUrl(car.image || car.photo || car.foto);
   const pm = (r.payment_method || (r.payment && r.payment.payment_method) || (r.payments && r.payments.length ? r.payments[0].payment_method : '') || '').toLowerCase();
 
   const ktpUrl = imgUrl(user.id_card || r.ktp || r.foto_ktp || r.image_ktp || user.ktp || user.foto_ktp || user.image_ktp);
@@ -386,7 +402,13 @@ window.viewRental = async function (id) {
       <div style="background:white; padding:16px; border-radius:12px; border:1px solid var(--border); margin-bottom:16px;">
         <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:12px;">Pelanggan</div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-          <div class="avatar" style="width:48px;height:48px;font-size:18px;">${avatarLetter(user.name || 'U')}</div>
+          <div class="avatar" style="width:48px;height:48px;font-size:18px; padding:0; overflow:hidden;">
+            ${(() => {
+              const ppath = user.profile_picture || user.profile_photo_path || user.photo || user.avatar;
+              if (ppath) return `<img src="${imgUrl(ppath)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+              return avatarLetter(user.name || 'U');
+            })()}
+          </div>
           <div>
             <div style="font-weight:700; font-size:15px;">${user.name || '-'}</div>
             <div style="font-size:13px;color:#64748b;">${user.email || ''}</div>
@@ -416,11 +438,15 @@ window.viewRental = async function (id) {
         <div style="display:flex;align-items:center;gap:12px; margin-bottom:16px;">
           ${img ? `<img src="${img}" style="width:72px;height:52px;object-fit:cover;border-radius:6px;">` : `<div class="car-img-placeholder" style="width:72px;height:52px;font-size:24px;"><i class="fas fa-car"></i></div>`}
           <div>
-            <div style="font-weight:700; font-size:15px;">${car.name || car.brand || '-'}</div>
-            <div style="font-size:13px;color:#64748b; font-family:monospace;">${car.license_plate || car.plat || '-'}</div>
+            <div style="font-weight:700; font-size:15px;">${car.name_car || car.name || car.brand || '-'}</div>
+            <div style="font-size:13px;color:#64748b; font-family:monospace;">${car.plate_number || car.license_plate || car.plat || '-'}</div>
           </div>
         </div>
         
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+          ${row('Lokasi Ambil / Cabang', r.branch_name || (r.branch && (r.branch.name || r.branch.branch_name)) || '-')}
+          ${row('Metode Ambil', (r.pickup_method || '').replace(/_/g, ' ').toUpperCase() || 'DI CABANG')}
+        </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
           ${row('Mulai Sewa', formatDate(r.start_date, false))}
           ${row('Selesai Sewa', formatDate(r.end_date, false))}

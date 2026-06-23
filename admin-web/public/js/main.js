@@ -25,6 +25,7 @@ const PER_PAGE = 10;
 let carsPage = 1, rentalsPage = 1, customersPage = 1;
 let rentalStatusFilter = '';
 let leafletMap = null, carMarkers = [];
+let allBranches = [];
 
 /* ===== INIT ===== */
 document.addEventListener('DOMContentLoaded', () => {
@@ -192,6 +193,13 @@ async function loadDashboard(silent = false) {
     rentalsRes = await Rentals.list();
   }
   const usersRes = await Users.list('per_page=1'); // Just to get the total length if possible, or all list
+  
+  if (allBranches.length === 0) {
+    const bRes = await Branches.list();
+    if (bRes && bRes.data && Array.isArray(bRes.data.data || bRes.data)) {
+      allBranches = bRes.data.data || bRes.data;
+    }
+  }
 
   const cars = extractList(carsRes);
   const rentals = extractList(rentalsRes);

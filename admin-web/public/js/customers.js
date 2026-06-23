@@ -33,7 +33,10 @@ function renderCustomers() {
   tbody.innerHTML = slice.map(u => `<tr>
     <td><div style="display:flex;align-items:center;gap:12px;">
       <div class="avatar" style="overflow:hidden;">
-        ${u.avatar ? `<img src="${imgUrl(u.avatar)}" style="width:100%;height:100%;object-fit:cover;">` : avatarLetter(u.name || 'U')}
+        ${(() => {
+          const ppath = u.profile_picture || u.profile_photo_path || u.photo || u.avatar;
+          return ppath ? `<img src="${imgUrl(ppath)}" style="width:100%;height:100%;object-fit:cover;">` : avatarLetter(u.name || 'U');
+        })()}
       </div>
       <div>
         <div style="font-weight:600;font-size:13px;">${u.name || '-'}</div>
@@ -72,7 +75,10 @@ window.viewCustomer = async function (id) {
   document.getElementById('customer-detail-body').innerHTML = `
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
       <div style="width:60px;height:60px;border-radius:16px;background:linear-gradient(135deg,#3b82f6,#2563eb);display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:22px;overflow:hidden;">
-        ${u.avatar ? `<img src="${imgUrl(u.avatar)}" style="width:100%;height:100%;object-fit:cover;">` : avatarLetter(u.name || 'U')}
+        ${(() => {
+          const ppath = u.profile_picture || u.profile_photo_path || u.photo || u.avatar;
+          return ppath ? `<img src="${imgUrl(ppath)}" style="width:100%;height:100%;object-fit:cover;">` : avatarLetter(u.name || 'U');
+        })()}
       </div>
       <div>
         <div style="font-size:17px;font-weight:700;">${u.name || '-'}</div>

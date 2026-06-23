@@ -20,6 +20,7 @@ async function apiFetch(path, options = {}) {
     if (res.status === 401) {
       localStorage.removeItem('smy_token');
       localStorage.removeItem('smy_user');
+      document.cookie = "smy_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
       window.location.href = '/login';
       return;
     }
@@ -79,6 +80,11 @@ const Cars = {
   delete: (id) => apiFetch('/deleteCar/' + id, { method: 'DELETE' }),
 };
 
+/* ---- BRANCHES ---- */
+const Branches = {
+  list: () => apiFetch('/branch')
+};
+
 /* ---- RESERVATIONS ----
    GET   /history-reservation        → list (customer own / admin all)
    GET   /all-reservation            → admin: all reservations (may exist)
@@ -123,8 +129,12 @@ const Users = {
 /* ---- IMAGE URL ---- */
 function imgUrl(path) {
   if (!path) return null;
-  if (path.startsWith('http')) return path;
-  return IMG_BASE + path;
+  let finalPath = path;
+  if (finalPath.includes('localhost') || finalPath.includes('127.0.0.1')) {
+    finalPath = finalPath.replace(/http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/, 'https://sewamobilyuk-api.exponic.site');
+  }
+  if (finalPath.startsWith('http')) return finalPath;
+  return IMG_BASE + finalPath;
 }
 
 /* ---- TOAST ---- */
@@ -225,43 +235,17 @@ function confirmAction(title, msg, onConfirm, danger = true) {
 function carDisplayName(c) { return c.name_car || c.name || '-'; }
 function carPlate(c) { return c.plate_number || c.plat || '-'; }
 function carStatus(c) {
-  if (c.availability_status === 'maintenance' || c.status === 'maintenance') return 'maintenance';
-  if (window.globalRentals && Array.isArray(window.globalRentals)) {
-    const activeRental = window.globalRentals.find(r => {
-      const cid = r.data_car_id || r.car_id || r.id_mobil || r.mobil_id || r.vehicle_id || r.id_kendaraan;
-      if (String(cid) !== String(c.id)) return false;
-      const st = (r.status || r.reservations_status || r.payment_status || '').toLowerCase();
-      return st !== 'cancelled' && 
-             st !== 'dibatalkan' && 
-             st !== 'failed' && 
-             st !== 'completed' && 
-             st !== 'selesai' && 
-             st !== 'rejected' && 
-             st !== 'ditolak' && 
-             !st.includes('reject') && 
-             !st.includes('batal') && 
-             !st.includes('cancel') && 
-             !st.includes('fail') && 
-             !st.includes('done') && 
-             !st.includes('complete');
-    });
-    
-    if (activeRental) {
-      const st = (activeRental.status || activeRental.reservations_status || activeRental.payment_status || 'pending').toLowerCase();
-      if (st.includes('pending_cash')) return 'pending_cash';
-      if (st.includes('waiting') || st.includes('pending')) return 'pending';
-      if (st === 'approved' || st === 'confirmed' || st.includes('konfirmasi') || st.includes('disetujui')) return 'approved';
-      return 'rented';
-    }
-  }
-  
   const rawStatus = (c.availability_status || c.status || 'available').toLowerCase();
+  
+  if (rawStatus.includes('maintenance')) return 'maintenance';
   if (rawStatus.includes('pending_cash')) return 'pending_cash';
   if (rawStatus.includes('waiting') || rawStatus.includes('pending')) return 'pending';
   if (rawStatus === 'approved' || rawStatus === 'confirmed' || rawStatus.includes('konfirmasi') || rawStatus.includes('disetujui')) return 'approved';
-  if (rawStatus === 'maintenance') return 'maintenance';
-  if (rawStatus === 'rented') return 'rented';
-  return 'available';
+  
+  // Treat booked as rented to map to existing UI styles if needed, otherwise return exactly what database says
+  if (rawStatus === 'rented' || rawStatus === 'booked' || rawStatus === 'unavailable') return 'rented';
+  
+  return rawStatus === 'available' ? 'available' : rawStatus;
 }
 function carPrice(c) { return c.price || c.price_per_day || 0; }
 function carYear(c) { return c.year_of_car || c.year || '-'; }

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8"/>
@@ -252,7 +252,7 @@
 <!-- ====== SETUP SCREEN ====== -->
 <div id="setup-screen" style="display:flex;">
   <div style="text-align:center;">
-    <div style="font-size:48px;margin-bottom:12px;">🚗</div>
+    <div style="font-size:48px;margin-bottom:12px;"></div>
     <h2>Setup Vehicle Tracker</h2>
     <p class="hint">Halaman ini untuk HP yang disembunyikan di dalam mobil.<br/>Isi data di bawah lalu tekan Mulai Tracking.</p>
   </div>
@@ -268,7 +268,7 @@
     <label>Label Mobil (opsional)</label>
     <input type="text" id="inp-label" placeholder="Contoh: Toyota Avanza – B 1234 ABC" autocomplete="off"/>
   </div>
-  <button class="btn-start" id="btn-start">📡 Mulai Tracking</button>
+  <button class="btn-start" id="btn-start"> Mulai Tracking</button>
   <p class="hint">Token bisa di-generate dari menu Tracking di Admin Panel.</p>
 </div>
 
@@ -277,7 +277,7 @@
 
   <!-- Header -->
   <div class="header">
-    <div class="header-icon">🚗</div>
+    <div class="header-icon"></div>
     <div>
       <div class="header-title" id="display-label">Vehicle Tracker</div>
       <div class="header-sub">SewaMobilYuk – GPS Live</div>
@@ -294,7 +294,7 @@
 
     <!-- Car info -->
     <div class="car-badge">
-      <div class="car-icon">🚗</div>
+      <div class="car-icon"></div>
       <div>
         <div class="car-name" id="car-name-display">Loading...</div>
         <div class="car-token" id="car-token-display">token: –</div>
@@ -303,7 +303,7 @@
 
     <!-- Ping counter -->
     <div class="card">
-      <div class="card-title">📡 Ping Terkirim</div>
+      <div class="card-title"> Ping Terkirim</div>
       <div class="counter-wrap">
         <div class="counter-num" id="ping-count">0</div>
         <div class="counter-label">lokasi berhasil dikirim</div>
@@ -313,7 +313,7 @@
 
     <!-- GPS Stats -->
     <div class="card">
-      <div class="card-title">📍 Koordinat GPS</div>
+      <div class="card-title"> Koordinat GPS</div>
       <div class="coords">
         <div class="coord-item">
           <div class="coord-icon">↕️</div>
@@ -330,7 +330,7 @@
           </div>
         </div>
         <div class="coord-item">
-          <div class="coord-icon">🎯</div>
+          <div class="coord-icon"></div>
           <div>
             <div class="coord-label">Akurasi</div>
             <div class="coord-val" id="val-accuracy">–</div>
@@ -364,7 +364,7 @@
 
     <!-- Log -->
     <div class="card">
-      <div class="card-title">📋 Log Aktivitas</div>
+      <div class="card-title"> Log Aktivitas</div>
       <div class="log-box" id="log-box">
         <span class="log-entry info">» Tracker dimuat. Menunggu GPS...</span>
       </div>
@@ -610,3 +610,4 @@ document.addEventListener('visibilitychange', () => {
 
 </body>
 </html>
+

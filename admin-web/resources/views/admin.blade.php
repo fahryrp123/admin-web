@@ -494,13 +494,7 @@
               <div class="stat-label">Mobil Sedang Jalan</div>
             </div>
           </div>
-          <div class="stat-card">
-            <div class="stat-icon purple"><i class="fas fa-wallet"></i></div>
-            <div>
-              <div class="stat-value" id="rentals-stat-income" style="font-size:20px;">–</div>
-              <div class="stat-label">Pendapatan Aktif</div>
-            </div>
-          </div>
+
         </div>
 
         <!-- Filter tabs -->
@@ -1098,10 +1092,10 @@
   </div>
 </div>
 
-<script src="{{ asset('js/api.js') }}?v=super_force_reload_124"></script>
+<script src="{{ asset('js/api.js') }}?v={{ time() }}"></script>
 <script src="{{ asset('js/main.js') }}?v={{ time() }}"></script>
 <script src="{{ asset('js/cars.js') }}?v={{ time() }}"></script>
-<script src="{{ asset('js/rentals.js') }}?v=super_force_reload_124"></script>
+<script src="{{ asset('js/rentals.js') }}?v={{ time() }}"></script>
 <script src="{{ asset('js/customers.js') }}?v={{ time() }}"></script>
 <script src="{{ asset('js/tracking.js') }}?v={{ time() }}"></script>
 <script src="{{ asset('js/reports.js') }}?v={{ time() }}"></script>

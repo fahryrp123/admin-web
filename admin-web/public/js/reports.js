@@ -41,14 +41,16 @@ async function loadReports() {
   let filteredRentals = rentals;
   if (startFilter) {
     filteredRentals = filteredRentals.filter(r => {
-      const rStart = r.start_date ? r.start_date.split(' ')[0] : '';
-      return rStart >= startFilter;
+      const dateStr = r.created_at || r.start_date || '';
+      const rDate = dateStr ? dateStr.split(' ')[0] : '';
+      return rDate >= startFilter;
     });
   }
   if (endFilter) {
     filteredRentals = filteredRentals.filter(r => {
-      const rStart = r.start_date ? r.start_date.split(' ')[0] : '';
-      return rStart <= endFilter;
+      const dateStr = r.created_at || r.start_date || '';
+      const rDate = dateStr ? dateStr.split(' ')[0] : '';
+      return rDate <= endFilter;
     });
   }
   
@@ -59,7 +61,7 @@ async function loadReports() {
   
   filteredRentals.forEach(r => {
     const st = (r.status || r.reservations_status || r.payment_status || '').toLowerCase();
-    const isCancelled = st === 'cancelled' || st.includes('batal') || st === 'failed';
+    const isCancelled = st === 'cancelled' || st.includes('batal') || st === 'failed' || st === 'rejected' || st.includes('tolak');
     const isCompleted = st === 'completed' || st.includes('selesai');
     const isOngoing = st === 'active' || st === 'ongoing' || st === 'on-going' || st === 'sedang disewa' || st.includes('jalan');
     const isApproved = st === 'approved' || st === 'confirmed' || st.includes('konfirmasi') || st.includes('disetujui') || st.includes('lunas') || st.includes('paid');
@@ -105,7 +107,7 @@ function renderReportsChart(rentals) {
     let sum = 0;
     rentals.forEach(r => {
       const st = (r.status || r.reservations_status || r.payment_status || '').toLowerCase();
-      const isCancelled = st === 'cancelled' || st.includes('batal') || st === 'failed';
+      const isCancelled = st === 'cancelled' || st.includes('batal') || st === 'failed' || st === 'rejected' || st.includes('tolak');
       
       if (!isCancelled) {
         const rd = new Date(r.created_at || r.start_date || '');
@@ -190,7 +192,7 @@ function renderCarsPerformance(cars, rentals) {
       if (String(cid) !== String(c.id)) return;
       
       const st = (r.status || r.reservations_status || r.payment_status || '').toLowerCase();
-      const isCancelled = st === 'cancelled' || st.includes('batal') || st === 'failed';
+      const isCancelled = st === 'cancelled' || st.includes('batal') || st === 'failed' || st === 'rejected' || st.includes('tolak');
       
       if (!isCancelled) {
         countTrans++;
