@@ -505,6 +505,7 @@
           <button class="btn btn-secondary btn-sm rental-tab" data-status="active">Aktif</button>
           <button class="btn btn-secondary btn-sm rental-tab" data-status="completed">Selesai</button>
           <button class="btn btn-secondary btn-sm rental-tab" data-status="cancelled">Dibatalkan</button>
+          <button class="btn btn-secondary btn-sm rental-tab" data-status="rejected">Ditolak</button>
         </div>
 
         <div class="card">

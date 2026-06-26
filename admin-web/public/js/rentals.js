@@ -19,9 +19,10 @@ async function loadRentals(page = 1, silent = false) {
   if (!silent) document.getElementById('rentals-loading').style.display = 'flex';
 
   // Fetch rentals and cars in parallel to map car details
-  const [res, carsRes] = await Promise.all([
+  const [res, carsRes, branchRes] = await Promise.all([
     Rentals.listAll().catch(() => Rentals.list()),
-    Cars.listAll().catch(() => Cars.list()) // Menggunakan listAll untuk mengambil semua mobil
+    Cars.listAll().catch(() => Cars.list()),
+    Branches.list().catch(() => null)
   ]);
 
   if (!silent) document.getElementById('rentals-loading').style.display = 'none';
@@ -36,6 +37,13 @@ async function loadRentals(page = 1, silent = false) {
     if (!r.car && !r.mobil && cid) {
       r.car = cars.find(c => String(c.id) === String(cid)) || {};
     }
+
+    const bid = r.branch_id || r.id_cabang;
+    if (!r.branch_name && bid) {
+      const b = (extractList(branchRes)).find(x => String(x.id) === String(bid));
+      if (b) r.branch_name = b.name || b.branch_name || b.nama_cabang;
+    }
+
     return r;
   });
 
@@ -112,6 +120,7 @@ function getFilteredRentals() {
     else if (rawStatus === 'active' || rawStatus === 'ongoing' || rawStatus === 'on-going' || rawStatus === 'sedang disewa' || rawStatus.includes('jalan')) normStatus = 'active';
     else if (rawStatus === 'completed' || rawStatus.includes('selesai')) normStatus = 'completed';
     else if (rawStatus === 'cancelled' || rawStatus.includes('batal') || rawStatus === 'failed') normStatus = 'cancelled';
+    else if (rawStatus === 'rejected' || rawStatus.includes('tolak')) normStatus = 'rejected';
 
     const matchStatus = !rentalStatusFilter || normStatus === rentalStatusFilter.toLowerCase();
 
@@ -217,7 +226,7 @@ function renderRentals() {
     }
 
     return `<tr style="${bgStyle}" onclick="viewRental(${r.id})" style="cursor:pointer;">
-    <td><span style="color:#94a3b8;font-size:13px;">#${r.id || (start + i + 1)}</span></td>
+    <td><span style="color:#3b82f6;font-size:13px;font-weight:700;">${r.no_reservasi || r.reservation_number || r.nomor_reservasi || ('RSV-' + r.id)}</span></td>
     <td>
       <div style="display:flex; align-items:center; gap:10px;">
         <div class="avatar bg-primary" style="color:white; padding:0; overflow:hidden;">${userAvatarHtml}</div>
@@ -250,15 +259,16 @@ function renderRentals() {
 }
 
 function setupRentalFilters() {
-  document.getElementById('rental-search').oninput = () => { rentalsPage = 1; renderRentals(); };
+  document.getElementById('rental-search')?.addEventListener('input', () => { rentalsPage = 1; renderRentals(); });
   
   // Date filter change listeners
   const startF = document.getElementById('rental-filter-start');
   const endF = document.getElementById('rental-filter-end');
   const clearBtn = document.getElementById('btn-clear-rental-dates');
   
-  if (startF) startF.onchange = () => { rentalsPage = 1; renderRentals(); };
-  if (endF) endF.onchange = () => { rentalsPage = 1; renderRentals(); };
+  document.getElementById('rental-filter-start')?.addEventListener('change', () => { rentalsPage = 1; renderRentals(); });
+  document.getElementById('rental-filter-end')?.addEventListener('change', () => { rentalsPage = 1; renderRentals(); });
+
   if (clearBtn) {
     clearBtn.onclick = () => {
       if (startF) startF.value = '';
@@ -291,8 +301,8 @@ function statusBadge(r) {
 
   if (typeof r === 'string') {
     const l = r.toLowerCase();
-    if (l === 'pending_cash') return '<span class="badge-pill pill-warning">Menunggu Cash</span>';
-    if (l.includes('waiting') || l.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
+    if (l === 'pending_cash') return '<span class="badge-pill pill-warning">Menunggu Konfirmasi Cash</span>';
+    if (l.includes('waiting') || l.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu Konfirmasi</span>';
     if (l === 'approved') return '<span class="badge-pill pill-primary">Disetujui</span>';
     if (l === 'active' || l === 'ongoing') return '<span class="badge-pill pill-success">Sedang Jalan</span>';
     if (l === 'completed' || l === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
@@ -306,10 +316,10 @@ function statusBadge(r) {
   const isCash = (pm === 'cash' || pm === 'tunai' || st === 'pending_cash');
 
   if (isCash && (st.includes('pending') || st.includes('waiting') || st === 'pending_cash')) {
-    return '<span class="badge-pill pill-warning">Menunggu Cash</span>';
+    return '<span class="badge-pill pill-warning">Menunggu Konfirmasi Cash</span>';
   }
 
-  if (st.includes('waiting') || st.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu</span>';
+  if (st.includes('waiting') || st.includes('pending')) return '<span class="badge-pill pill-warning">Menunggu Konfirmasi</span>';
   if (st === 'approved' || st === 'confirmed' || st.includes('konfirmasi') || st.includes('disetujui')) return '<span class="badge-pill pill-primary">Dikonfirmasi</span>';
   if (st === 'active' || st === 'ongoing' || st === 'on-going' || st === 'sedang disewa' || st.includes('jalan')) return '<span class="badge-pill pill-success">Sedang Jalan</span>';
   if (st === 'completed' || st === 'selesai') return '<span class="badge-pill pill-success">Selesai</span>';
@@ -393,7 +403,7 @@ window.viewRental = async function (id) {
     <div style="padding:24px;">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px;">
         <div>
-          <h2 style="margin:0 0 4px 0; font-size:24px;">#${r.id}</h2>
+          <h2 style="margin:0 0 4px 0; font-size:24px;">${r.no_reservasi || r.reservation_number || r.nomor_reservasi || ('RSV-' + r.id)}</h2>
           <div style="color:#64748b; font-size:13px;">Dibuat: ${formatDate(r.created_at, false)}</div>
         </div>
         ${statusBadge(r)}
@@ -443,10 +453,12 @@ window.viewRental = async function (id) {
           </div>
         </div>
         
+        ${(pm === 'cash' || pm === 'tunai') ? '' : `
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
-          ${row('Lokasi Ambil / Cabang', r.branch_name || (r.branch && (r.branch.name || r.branch.branch_name)) || '-')}
+          ${row('Lokasi Ambil / Cabang', r.pickup_method === 'antar' || r.pickup_method === 'delivery' || r.pickupMethod === 'antar' ? (r.delivery_address || r.cust_address || r.address || userAddress || 'Diantar ke lokasi') : (r.branch_name || (r.branch && (r.branch.name || r.branch.branch_name)) || '-'))}
           ${row('Metode Ambil', (r.pickup_method || '').replace(/_/g, ' ').toUpperCase() || 'DI CABANG')}
         </div>
+        `}
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
           ${row('Mulai Sewa', formatDate(r.start_date, false))}
           ${row('Selesai Sewa', formatDate(r.end_date, false))}
@@ -670,8 +682,10 @@ window.confirmCash = async function (id) {
     }
 
     if (amount < tagihan) {
-      const lanjut = confirm(`Uang yang dimasukkan (${formatRp(amount)}) KURANG dari tagihan (${formatRp(tagihan)}). Tetap lanjutkan?`);
-      if (!lanjut) return;
+      toast(`Pembayaran Gagal: Uang yang dimasukkan (${formatRp(amount)}) KURANG dari tagihan (${formatRp(tagihan)}).`, 'error');
+      return;
+    } else if (amount > tagihan) {
+      toast(`Informasi: Uang yang dimasukkan LEBIH. Kembalian: ${formatRp(amount - tagihan)}.`, 'warning');
     }
 
     const btn = document.getElementById('btn-submit-cash');
