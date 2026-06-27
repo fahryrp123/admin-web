@@ -581,7 +581,7 @@ async function openGenerateTokenModal() {
   sel.innerHTML = '<option value="">Memuat data mobil...</option>';
   
   try {
-    const res = await Cars.list();
+    const res = await Cars.listAll();
     if (!res || !res.ok) throw new Error();
     const cars = window.extractList(res);
     
